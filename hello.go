@@ -7,6 +7,7 @@ import (
 	"os"
 	"io"
 	"sort"
+	"github.com/megesdal/melodispurences/damerau"
 )
 
 type Person struct {
@@ -37,7 +38,17 @@ func main() {
 		count++
 		found := false
 		for j := 0; j < len(m); j++ {
-			if m[j] == fields[2] {
+
+			existing := m[j]
+			toCheck := fields[2]
+			distMin := float64(len(existing) + len(toCheck)) / float64(2.0)
+
+			value := float64(damerau.DamerauLevenshteinDistance(m[j], fields[2])) / distMin
+			if value < 0.2 {
+			//if m[j] == fields[2] {
+				if value > 0 {
+					fmt.Printf("  %f is value: %s vs. %s\n", value, existing, toCheck)
+				}
 				found = true
 				break
 			}
