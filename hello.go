@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	"log"
-	"os"
+	"github.com/megesdal/melodispurences/bed"
+	//"github.com/megesdal/melodispurences/damerau"
 	"io"
-	"sort"
-	"github.com/megesdal/melodispurences/damerau"
+	"log"
+	//"math"
+	"os"
+	//"sort"
+	"time"
 )
 
 type Person struct {
@@ -24,8 +27,14 @@ func main() {
 
 	csvReader := csv.NewReader(file)
 
-	m := []string{}
-	count := 0
+	startTS := time.Now()
+	countTotal := 0
+	countUnique := 0
+
+	//m := []string{}
+	//normThreshold := 0.2
+	tree := bed.New(2000)
+
 	for true {
 		fields, err := csvReader.Read()
 		if err != nil {
@@ -35,33 +44,54 @@ func main() {
 			break
 		}
 
-		count++
 		found := false
-		for j := 0; j < len(m); j++ {
+		toCheck := fields[2]
+		//lenToCheck := float64(len(toCheck))
+
+		results := tree.RangeQuery(toCheck, 5)
+		if len(results) > 0 {
+			//fmt.Printf("%v\n", results)
+			found = true
+		}
+
+		/*for j := 0; j < len(m); j++ {
 
 			existing := m[j]
-			toCheck := fields[2]
-			distMin := float64(len(existing) + len(toCheck)) / float64(2.0)
+			lenExisting := float64(len(existing))
+			distMax := math.Max(lenExisting, lenToCheck)
 
-			value := float64(damerau.DamerauLevenshteinDistance(m[j], fields[2])) / distMin
-			if value < 0.2 {
-			//if m[j] == fields[2] {
-				if value > 0 {
-					fmt.Printf("  %f is value: %s vs. %s\n", value, existing, toCheck)
-				}
+			// if the minimum norm distance is greater than the threshold, don't bother
+			if math.Abs(lenExisting-lenToCheck)/distMax > normThreshold {
+				continue
+			}
+
+			normDist := float64(damerau.DamerauLevenshteinDistance(m[j], fields[2])) / distMax
+			if normDist <= normThreshold {
+				//if normDist > 0 {
+				//	fmt.Printf("  %f is value: %s vs. %s\n", normDist, existing, toCheck)
+				//}
 				found = true
 				break
 			}
-		}
+		}*/
 
 		if !found {
-			m = append(m, fields[2])
+			countUnique++
+			tree.Insert(toCheck)
+			//m = append(m, toCheck)
+		}
+		countTotal++
+
+		if countTotal%1000 == 0 {
+			durationSoFarNano := time.Now().Sub(startTS)
+			fmt.Printf("%d unique out of %d processed so far [%dms]\n", countUnique, countTotal, durationSoFarNano/time.Millisecond)
 		}
 	}
 
-	sort.Strings(m)
-	for i := 0; i < len(m); i++ {
-		fmt.Printf("contributor name: %s\n", m[i])
-	}
-	fmt.Printf("\n%d unique contributors out of %d entries", len(m), count)
+	fmt.Printf("%d unique out of %d processed FINAL\n", countUnique, countTotal)
+	//sort.Strings(m)
+	//for i := 0; i < len(m); i++ {
+	//	fmt.Printf("contributor name: %s\n", m[i])
+	//}
+	//fmt.Printf("\n%d unique contributors out of %d entries", len(m), count)
 }

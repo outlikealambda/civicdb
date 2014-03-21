@@ -5,24 +5,59 @@ import (
 	//"fmt"
 )
 
+func TestRangeQuery(t *testing.T) {
+
+	tertiaryBTree := New(3)
+	tertiaryBTree.Insert("Jim Gray")
+	tertiaryBTree.Insert("Jim Grey")
+
+	results := tertiaryBTree.RangeQuery("Jam Gray", 2)
+	if len(results) != 2 {
+		t.Error("Expect: 2 query results for distance threshold of 2", len(results))
+	}
+
+	// TODO
+	if len(tertiaryBTree.RangeQuery("Jam Gray", 1)) != 1 {
+		t.Error("Expect: 1 query result for distance threshold of 1", len(results))
+	}
+
+	if len(tertiaryBTree.RangeQuery("Jim Gray", 0)) != 1 {
+		t.Error("Expect: 1 query result for exact match query with threshold of 1", len(results))
+	}
+}
+
 func TestVerify(t *testing.T) {
 
-	if !VerifyED("Jim Grey", "Jim Gay", 2) {
+	if !VerifyEditDistance("Jim Grey", "Jim Gay", 2) {
 		t.Error("Expect: Jim Grey and Jim Gay to be within 2 edits")
 	}
 
-	if !VerifyED("Jim Grey", "Jim Grey", 0) {
+	if !VerifyEditDistance("Jim Grey", "Jim Grey", 0) {
 		t.Error("Expect: Jim Grey to be within 0 edits of itself")
 	}
 
-	if VerifyED("Jim Grey", "Jim Gay", 1) {
+	if VerifyEditDistance("Jim Grey", "Jim Gay", 1) {
 		t.Error("Expect: Jim Grey and Jim Gay to not be within 1 edit")
+	}
+}
+
+func TestLowerBound(t *testing.T) {
+	//if LowerBoundEst("Jam Gray", "Jim Gray", "Jim Grey") != 1 {
+	//	t.Error("Expect: Jam Grey compared to interval [Jim Gray, Jim Grey] to have a lower bound estimate of 1")
+	//}
+
+	if !VerifyLowerBound("Jam Gray", "Jim Gray", "Jim Grey", 1) {
+		t.Error("Expect: Jam Grey compared to interval [Jim Gray, Jim Grey] to PASS a lower bound estimate verification")
+	}
+
+	if VerifyLowerBound("Mark Egesdal", "Jim Gray", "Jim Grey", 1) {
+		t.Error("Expect: Mark Egesdal compared to interval [Jim Gray, Jim Grey] to FAIL a lower bound estimate verification")
 	}
 }
 
 func TestBinaryInsertABCD(t *testing.T) {
 
-	binaryBTree := NewTree(2)
+	binaryBTree := New(2)
 	binaryBTree.Insert("a")
 	if binaryBTree.ToString() != "a\n" {
 		t.Error("Not expected:", binaryBTree.ToString())
@@ -46,7 +81,7 @@ func TestBinaryInsertABCD(t *testing.T) {
 
 func TestBinaryInsertABDC(t *testing.T) {
 
-	binaryBTree := NewTree(2)
+	binaryBTree := New(2)
 	binaryBTree.Insert("a")
 	if binaryBTree.ToString() != "a\n" {
 		t.Error("Not expected:", binaryBTree.ToString())
@@ -69,7 +104,7 @@ func TestBinaryInsertABDC(t *testing.T) {
 }
 
 func TestBinaryInsertDCBA(t *testing.T) {
-	binaryBTree := NewTree(2)
+	binaryBTree := New(2)
 	binaryBTree.Insert("d")
 	if binaryBTree.ToString() != "d\n" {
 		t.Error("Not expected:", binaryBTree.ToString())
@@ -92,71 +127,71 @@ func TestBinaryInsertDCBA(t *testing.T) {
 }
 
 func TestTertiaryInsertABCD(t *testing.T) {
-	binaryBTree := NewTree(3)
-	binaryBTree.Insert("a")
-	if binaryBTree.ToString() != "a\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree := New(3)
+	tertiaryBTree.Insert("a")
+	if tertiaryBTree.ToString() != "a\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("b")
-	if binaryBTree.ToString() != "ab\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("b")
+	if tertiaryBTree.ToString() != "ab\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("c")
-	if binaryBTree.ToString() != "b0 <-- a\nb1 <-- bc\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("c")
+	if tertiaryBTree.ToString() != "b0 <-- a\nb1 <-- bc\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("d")
-	if binaryBTree.ToString() != "bc0 <-- a\nbc1 <-- b\nbc2 <-- cd\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("d")
+	if tertiaryBTree.ToString() != "bc0 <-- a\nbc1 <-- b\nbc2 <-- cd\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 }
 
 func TestTertiaryInsertABDC(t *testing.T) {
-	binaryBTree := NewTree(3)
-	binaryBTree.Insert("a")
-	if binaryBTree.ToString() != "a\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree := New(3)
+	tertiaryBTree.Insert("a")
+	if tertiaryBTree.ToString() != "a\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("b")
-	if binaryBTree.ToString() != "ab\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("b")
+	if tertiaryBTree.ToString() != "ab\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("d")
-	if binaryBTree.ToString() != "b0 <-- a\nb1 <-- bd\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("d")
+	if tertiaryBTree.ToString() != "b0 <-- a\nb1 <-- bd\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("c")
-	if binaryBTree.ToString() != "bd0 <-- a\nbd1 <-- bc\nbd2 <-- d\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("c")
+	if tertiaryBTree.ToString() != "bd0 <-- a\nbd1 <-- bc\nbd2 <-- d\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 }
 
 func TestTertiaryInsertDCBA(t *testing.T) {
-	binaryBTree := NewTree(3)
+	tertiaryBTree := New(3)
 
-	binaryBTree.Insert("d")
-	if binaryBTree.ToString() != "d\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("d")
+	if tertiaryBTree.ToString() != "d\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("c")
-	if binaryBTree.ToString() != "cd\n" {
-		t.Error("Expected: cd, but was:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("c")
+	if tertiaryBTree.ToString() != "cd\n" {
+		t.Error("Expected: cd, but was:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("b")
-	if binaryBTree.ToString() != "d0 <-- bc\nd1 <-- d\n" {
-		t.Error("Expected: d0 <-- bc, d1 <-- d, but was:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("b")
+	if tertiaryBTree.ToString() != "d0 <-- bc\nd1 <-- d\n" {
+		t.Error("Expected: d0 <-- bc, d1 <-- d, but was:\n", tertiaryBTree.ToString())
 	}
 
-	binaryBTree.Insert("a")
-	if binaryBTree.ToString() != "cd0 <-- ab\ncd1 <-- c\ncd2 <-- d\n" {
-		t.Error("Not expected:\n", binaryBTree.ToString())
+	tertiaryBTree.Insert("a")
+	if tertiaryBTree.ToString() != "cd0 <-- ab\ncd1 <-- c\ncd2 <-- d\n" {
+		t.Error("Not expected:\n", tertiaryBTree.ToString())
 	}
 }

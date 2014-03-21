@@ -17,6 +17,7 @@ type BPlusTreeNode struct {
 	parentChildIdx int
 	splits         []string         // size m
 	children       []*BPlusTreeNode // size m + 1
+	data           [][]string       // size m x n (leaf only)
 }
 
 func intMax(a int, b int) int {
@@ -31,44 +32,52 @@ func intAbs(a int) int {
 	return int(math.Abs(float64(a)))
 }
 
-func VerifyED(s1 string, s2 string, distanceThreshold int) bool {
+func VerifyEditDistance(s1 string, s2 string, distanceThreshold int) bool {
 
 	if intAbs(len(s1)-len(s2)) > distanceThreshold {
 		return false
 	}
 
+	_, result := createVerificationTable(len(s1), len(s2), distanceThreshold, func(rowIdx int, colIdx int) bool {
+		return s1[rowIdx] == s2[colIdx]
+	})
+
+	return result
+}
+
+func createVerificationTable(nrows int, ncols int, distanceThreshold int, compare func(int, int) bool) ([]int, bool) {
+
 	// construct tabel of 2 rows and len(s2) + 1 columns
 	table := make([][]int, 2)
 	for i := 0; i < len(table); i++ {
-		table[i] = make([]int, len(s2)+1)
+		table[i] = make([]int, ncols+1)
 	}
 	// table[0][0] = 0 // empty string is 0 edits from itself
 
-	firstEnd := intMin(len(s2)+1, 1+distanceThreshold)
+	firstEnd := intMin(ncols+1, 1+distanceThreshold)
 	for j := 0; j < firstEnd; j++ {
 		table[0][j] = j
 	}
-
-	headerRow := "  \u2205 "
-	for k := 0; k < len(s2); k++ {
-		headerRow += string(s2[k]) + " "
-	}
-	fmt.Println(headerRow)
-
-	row := fmt.Sprintf("\u2205 ")
-	for k := 0; k < len(table[0]); k++ {
-		if k < firstEnd {
-			row += fmt.Sprintf("%d ", table[0][k])
-		} else {
-			row += "- "
+	/*
+		headerRow := "  \u2205 "
+		for k := 0; k < len(s2); k++ {
+			headerRow += string(s2[k]) + " "
 		}
-	}
-	fmt.Println(row)
-
+		//fmt.Println(headerRow)
+		row := fmt.Sprintf("\u2205 ")
+		for k := 0; k < len(table[0]); k++ {
+			if k < firstEnd {
+				row += fmt.Sprintf("%d ", table[0][k])
+			} else {
+				row += "- "
+			}
+		}
+		//fmt.Println(row)
+	*/
 	// i == 0 is the empty string... handled by init above
-	for i := 1; i < len(s1)+1; i++ {
+	for i := 1; i < nrows+1; i++ {
 		start := intMax(0, i-distanceThreshold)
-		end := intMin(len(s2)+1, i+distanceThreshold+1)
+		end := intMin(ncols+1, i+distanceThreshold+1)
 		m := distanceThreshold + 1
 		//fmt.Println(start, end)
 		for j := start; j < end; j++ {
@@ -85,7 +94,7 @@ func VerifyED(s1 string, s2 string, distanceThreshold int) bool {
 				d2 = table[1][j-1] + 1
 				d3 = table[0][j-1]
 				//fmt.Printf("comparing %s vs. %s (prev d=%d [%d])\n", string(s1[i-1]), string(s2[j-1]), d3, j)
-				if s1[i-1] != s2[j-1] {
+				if !compare(i-1, j-1) {
 					d3 += 1
 				}
 			} else {
@@ -97,27 +106,28 @@ func VerifyED(s1 string, s2 string, distanceThreshold int) bool {
 
 			m = intMin(m, table[1][j])
 		}
-		row := fmt.Sprintf("%v ", string(s1[i-1]))
-		for k := 0; k < len(table[0]); k++ {
-			if k >= start && k < end {
-				row += fmt.Sprintf("%d ", table[1][k])
-			} else {
-				row += "- "
+		/*
+			row := fmt.Sprintf("%v ", string(s1[i-1]))
+			for k := 0; k < len(table[0]); k++ {
+				if k >= start && k < end {
+					row += fmt.Sprintf("%d ", table[1][k])
+				} else {
+					row += "- "
+				}
 			}
-		}
-		fmt.Println(row, "|", m)
-
+			//fmt.Println(row, "|", m)
+		*/
 		if m > distanceThreshold {
-			return false
+			return table[1], false
 		}
-		for j, n := 0, len(s2)+1; j < n; j++ {
+		for j, n := 0, ncols+1; j < n; j++ {
 			table[0][j] = table[1][j]
 		}
 	}
-	return true
+	return table[0], true
 }
 
-func NewTree(b int) *BPlusTree {
+func New(b int) *BPlusTree {
 	if b < 2 {
 		return nil
 	}
@@ -198,6 +208,8 @@ func revToString(node *BPlusTreeNode) string {
 
 func (tree *BPlusTree) Insert(q string) {
 	nodeToInsert := tree.FindNode(q)
+	// TODO: the find step should be able to say if we are inserting a new node or merging with an existing
+	// can take in a distance threshold on insert to
 	//fmt.Printf("Found node where value %s belongs: %s\n", q, revToString(nodeToInsert))
 	recInsert(q, nodeToInsert, nil)
 }
@@ -429,33 +441,225 @@ func recFindNode(q string, node *BPlusTreeNode) *BPlusTreeNode {
 	return recFindNode(q, node.children[len(node.splits)])
 }
 
-func lowerBound(q string, smin string, smax string) int {
-	//fmt.Println("TODO", q, smin, smax)
-	return 0
-}
+func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int) bool {
+	lcp := longestCommonPrefix(smin, smax)
+	nlcp := len(lcp)
+	var cmin uint8
+	if len(smin) == nlcp {
+		cmin = '!' // \u0021... if I trim, do I need to go lower?
+	} else {
+		cmin = smin[nlcp]
+	}
 
-// longest common prefix
-func lenLCP(si string, sj string) int {
-	n := 0
-	for k, ni, nj := 0, len(si), len(sj); k < ni && k < nj; k++ {
-		if si[k] == sj[k] {
-			n++
+	if len(smax) == nlcp {
+		return intMax(nlcp, len(q)) <= distanceThreshold
+	}
+	cmax := smax[nlcp]
+
+	lastRow, verified := createVerificationTable(nlcp+1, len(q), distanceThreshold, func(rowIdx int, colIdx int) bool {
+		if rowIdx < len(lcp) {
+			if lcp[rowIdx] != q[colIdx] {
+				return false
+			}
+		} else {
+			if q[colIdx] < cmin || q[colIdx] > cmax {
+				return false
+			}
+		}
+		return true
+	})
+
+	if !verified {
+		return verified
+	}
+
+	min := intMax(len(q), nlcp+1)
+	for k, n := 0, len(lastRow); k < n; k++ {
+		if lastRow[k] < min {
+			min = lastRow[k]
 		}
 	}
-	return n
+
+	return min <= distanceThreshold
 }
 
-func RangeQuery(q string, node *BPlusTreeNode, distanceThreshold int, smin string, smax string) {
+/*
+// TODO Consolidate this with the Verify fn and add in distance Threshold
+// Above is already DONE, leaving here in case bugs in the are found in the short term
+func LowerBoundEst(q string, smin string, smax string) int {
+	// TODO: how is distance threshold calculated?
+	//fmt.Println("TODO", q, smin, smax)
+	lcp := longestCommonPrefix(smin, smax)
+	nlcp := len(lcp)
+	var cmin uint8
+	if len(smin) == nlcp {
+		cmin = '!' // \u0021... if I trim, do I need to go lower?
+	} else {
+		cmin = smin[nlcp]
+	}
+
+	if len(smax) == nlcp {
+		return intMax(nlcp, len(q))
+	}
+	cmax := smax[nlcp]
+
+	//fmt.Println(string(cmin), string(cmax))
+	distanceThreshold := 2 // TODO
+	distanceThreshold = len(q)
+
+	table := make([][]int, 2)
+	for i := 0; i < len(table); i++ {
+		table[i] = make([]int, len(q)+1)
+	}
+
+	firstEnd := intMin(len(q)+1, 1+distanceThreshold)
+	for j := 0; j < firstEnd; j++ {
+		table[0][j] = j
+	}
+
+	headerRow := "   \u2205 "
+	for k := 0; k < len(q); k++ {
+		headerRow += string(q[k]) + " "
+	}
+	//fmt.Println(headerRow)
+
+	row := fmt.Sprintf("\u2205  ")
+	for k := 0; k < len(table[0]); k++ {
+		if k < firstEnd {
+			row += fmt.Sprintf("%d ", table[0][k])
+		} else {
+			row += "- "
+		}
+	}
+	//fmt.Println(row)
+
+	// i == 0 is the empty string... handled by init above
+	for i := 1; i < len(lcp)+2; i++ {
+		start := intMax(0, i-distanceThreshold)
+		end := intMin(len(q)+1, i+distanceThreshold+1)
+		//fmt.Println(start, end)
+		for j := start; j < end; j++ {
+			var d1 int
+			if j < i+distanceThreshold {
+				d1 = table[0][j] + 1
+			} else {
+				d1 = distanceThreshold + 1
+			}
+
+			var d2 int
+			var d3 int
+			if j > 0 {
+				d2 = table[1][j-1] + 1
+				d3 = table[0][j-1]
+				//fmt.Printf("comparing %s vs. %s (prev d=%d [%d])\n", string(s1[i-1]), string(s2[j-1]), d3, j)
+
+				if i < len(lcp)+1 {
+					if lcp[i-1] != q[j-1] {
+						d3 += 1
+					}
+				} else {
+					if q[j-1] < cmin || q[j-1] > cmax {
+						d3 += 1
+					}
+				}
+			} else {
+				d2 = distanceThreshold + 1
+				d3 = distanceThreshold + 1
+			}
+			//fmt.Printf("%d %d %d\n", d1, d2, d3)
+			table[1][j] = intMin(intMin(d1, d2), d3)
+		}
+
+		var row string
+		if i < len(lcp)+1 {
+			row = fmt.Sprintf("%v  ", string(lcp[i-1]))
+		} else {
+			row = fmt.Sprintf("%v%v ", string(cmin), string(cmax))
+		}
+		for k := 0; k < len(table[0]); k++ {
+			if k >= start && k < end {
+				row += fmt.Sprintf("%d ", table[1][k])
+			} else {
+				row += "- "
+			}
+		}
+		//fmt.Println(row)
+
+		for j, n := 0, len(q)+1; j < n; j++ {
+			table[0][j] = table[1][j]
+		}
+	}
+
+	min := intMax(len(q), nlcp+1)
+	row = "   "
+	for k := 0; k < len(table[0]); k++ {
+		row += fmt.Sprintf("%d ", table[0][k])
+		if table[0][k] < min {
+			min = table[0][k]
+		}
+	}
+	//fmt.Println(row)
+
+	return min
+}
+*/
+
+// longest common prefix
+func longestCommonPrefix(smin string, smax string) string {
+	lcp := make([]uint8, intMax(len(smin), len(smax)))
+	n := 0
+	for k, nmin, nmax := 0, len(smin), len(smax); k < nmin && k < nmax; k++ {
+		if smin[k] == smax[k] {
+			lcp[k] = smin[k]
+			n++
+		} else {
+			break
+		}
+	}
+	return string(lcp[:n])
+}
+
+func (tree *BPlusTree) RangeQuery(q string, distanceThreshold int) []string {
+	results := make([]string, 0) // length?
+	//resultsChan := make(chan string)
+	// TODO: change to channels to parallelize the next bit
+	results = recRangeQuery(q, tree.root, distanceThreshold, "", "", results)
+	//fmt.Printf("%v\n", results)
+	return results
+}
+
+func recRangeQuery(q string, node *BPlusTreeNode, distanceThreshold int, smin string, smax string, results []string) []string {
 	if node.isLeafNode() {
 		for j := 0; j < len(node.splits); j++ {
 			sj := node.splits[j]
-			if VerifyED(q, sj, distanceThreshold) {
-				//fmt.Println("Include", sj)
+			if VerifyEditDistance(q, sj, distanceThreshold) {
+				results = append(results, sj)
 			}
 		}
 	} else {
+		if len(node.splits) > 0 {
+			if VerifyLowerBound(q, smin, node.splits[0], distanceThreshold) {
+				results = recRangeQuery(q, node.children[0], distanceThreshold, smin, node.splits[0], results)
+			}
 
+			for j, m := 1, len(node.splits); j < m; j++ {
+				if VerifyLowerBound(q, node.splits[j-1], node.splits[j], distanceThreshold) {
+					results = recRangeQuery(q, node.children[j], distanceThreshold, node.splits[j-1], node.splits[j], results)
+				}
+			}
+
+			// I want smax == "" to be interpretted like the last possible word in the alphabet?
+			// which would pretty much guarantee an lcp of 0, which the empty string achieves
+			if VerifyLowerBound(q, node.splits[len(node.splits)-1], smax, distanceThreshold) {
+				results = recRangeQuery(q, node.children[len(node.splits)], distanceThreshold, node.splits[len(node.splits)-1], smax, results)
+			}
+		} else {
+			if len(node.children) > 0 { // should only ever be one...
+				results = recRangeQuery(q, node.children[0], distanceThreshold, smin, smax, results)
+			}
+		}
 	}
+	return results
 }
 
 func compare(a string, b string) int {
