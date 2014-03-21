@@ -19,13 +19,21 @@ type BPlusTreeNode struct {
 	children       []*BPlusTreeNode // size m + 1
 }
 
+func intMax(a int, b int) int {
+	return int(math.Max(float64(a), float64(b)))
+}
+
 func intMin(a int, b int) int {
 	return int(math.Min(float64(a), float64(b)))
 }
 
+func intAbs(a int) int {
+	return int(math.Abs(float64(a)))
+}
+
 func VerifyED(s1 string, s2 string, distanceThreshold int) bool {
 
-	if int(math.Abs(float64(len(s1)-len(s2)))) > distanceThreshold {
+	if intAbs(len(s1)-len(s2)) > distanceThreshold {
 		return false
 	}
 
@@ -34,40 +42,75 @@ func VerifyED(s1 string, s2 string, distanceThreshold int) bool {
 	for i := 0; i < len(table); i++ {
 		table[i] = make([]int, len(s2)+1)
 	}
+	// table[0][0] = 0 // empty string is 0 edits from itself
 
-	for j, n := 1, intMin(len(s2)+1, 1+distanceThreshold); j <= n; j++ {
-		table[0][j] = j - 1
+	firstEnd := intMin(len(s2)+1, 1+distanceThreshold)
+	for j := 0; j < firstEnd; j++ {
+		table[0][j] = j
 	}
 
-	m := distanceThreshold + 1
-	for i := 2; i <= len(s1)+1; i++ {
-		for j, n := intMin(1, i-distanceThreshold), intMin(len(s2)+1, i+distanceThreshold); j <= n; j++ {
+	headerRow := "  \u2205 "
+	for k := 0; k < len(s2); k++ {
+		headerRow += string(s2[k]) + " "
+	}
+	fmt.Println(headerRow)
+
+	row := fmt.Sprintf("\u2205 ")
+	for k := 0; k < len(table[0]); k++ {
+		if k < firstEnd {
+			row += fmt.Sprintf("%d ", table[0][k])
+		} else {
+			row += "- "
+		}
+	}
+	fmt.Println(row)
+
+	// i == 0 is the empty string... handled by init above
+	for i := 1; i < len(s1)+1; i++ {
+		start := intMax(0, i-distanceThreshold)
+		end := intMin(len(s2)+1, i+distanceThreshold+1)
+		m := distanceThreshold + 1
+		//fmt.Println(start, end)
+		for j := start; j < end; j++ {
 			var d1 int
 			if j < i+distanceThreshold {
-				d1 = table[0][j]
+				d1 = table[0][j] + 1
 			} else {
 				d1 = distanceThreshold + 1
 			}
 
 			var d2 int
 			var d3 int
-			if j > 1 {
+			if j > 0 {
 				d2 = table[1][j-1] + 1
 				d3 = table[0][j-1]
-				if s1[i-1] == s2[j-1] {
+				//fmt.Printf("comparing %s vs. %s (prev d=%d [%d])\n", string(s1[i-1]), string(s2[j-1]), d3, j)
+				if s1[i-1] != s2[j-1] {
 					d3 += 1
 				}
 			} else {
 				d2 = distanceThreshold + 1
 				d3 = distanceThreshold + 1
 			}
+			//fmt.Printf("%d %d %d\n", d1, d2, d3)
 			table[1][j] = intMin(intMin(d1, d2), d3)
+
 			m = intMin(m, table[1][j])
 		}
+		row := fmt.Sprintf("%v ", string(s1[i-1]))
+		for k := 0; k < len(table[0]); k++ {
+			if k >= start && k < end {
+				row += fmt.Sprintf("%d ", table[1][k])
+			} else {
+				row += "- "
+			}
+		}
+		fmt.Println(row, "|", m)
+
 		if m > distanceThreshold {
 			return false
 		}
-		for j, n := 0, len(s2)+1; j <= n; j++ {
+		for j, n := 0, len(s2)+1; j < n; j++ {
 			table[0][j] = table[1][j]
 		}
 	}
@@ -389,6 +432,17 @@ func recFindNode(q string, node *BPlusTreeNode) *BPlusTreeNode {
 func lowerBound(q string, smin string, smax string) int {
 	//fmt.Println("TODO", q, smin, smax)
 	return 0
+}
+
+// longest common prefix
+func lenLCP(si string, sj string) int {
+	n := 0
+	for k, ni, nj := 0, len(si), len(sj); k < ni && k < nj; k++ {
+		if si[k] == sj[k] {
+			n++
+		}
+	}
+	return n
 }
 
 func RangeQuery(q string, node *BPlusTreeNode, distanceThreshold int, smin string, smax string) {

@@ -5,6 +5,21 @@ import (
 	//"fmt"
 )
 
+func TestVerify(t *testing.T) {
+
+	if !VerifyED("Jim Grey", "Jim Gay", 2) {
+		t.Error("Expect: Jim Grey and Jim Gay to be within 2 edits")
+	}
+
+	if !VerifyED("Jim Grey", "Jim Grey", 0) {
+		t.Error("Expect: Jim Grey to be within 0 edits of itself")
+	}
+
+	if VerifyED("Jim Grey", "Jim Gay", 1) {
+		t.Error("Expect: Jim Grey and Jim Gay to not be within 1 edit")
+	}
+}
+
 func TestBinaryInsertABCD(t *testing.T) {
 
 	binaryBTree := NewTree(2)
