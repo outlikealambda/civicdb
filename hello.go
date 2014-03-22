@@ -102,9 +102,13 @@ func simpleDamerau() {
 	countTotal := 0
 	countUnique := 0
 
+	//var queryDurationSum time.Duration
+	var insertDurationSum time.Duration
+
 	//m := []string{}
 	//normThreshold := 0.2
-	tree := bed.New(2000)
+	branchFactor := 32
+	tree := bed.New(branchFactor)
 
 	for true {
 		fields, err := csvReader.Read()
@@ -119,11 +123,13 @@ func simpleDamerau() {
 		toCheck := fields[2]
 		//lenToCheck := float64(len(toCheck))
 
-		results := tree.RangeQuery(toCheck, 5)
-		if len(results) > 0 {
-			//fmt.Printf("%v\n", results)
-			found = true
-		}
+		//beforeQueryTS := time.Now()
+		//results := tree.RangeQuery(toCheck, 5)
+		//queryDurationSum += time.Now().Sub(beforeQueryTS)
+		//if len(results) > 0 {
+		//fmt.Printf("%v\n", results)
+		//found = true
+		//}
 
 		/*for j := 0; j < len(m); j++ {
 
@@ -148,18 +154,22 @@ func simpleDamerau() {
 
 		if !found {
 			countUnique++
+			beforeInsertTS := time.Now()
 			tree.Insert(toCheck)
+			insertDurationSum += time.Now().Sub(beforeInsertTS)
 			//m = append(m, toCheck)
 		}
 		countTotal++
 
-		if countTotal%1000 == 0 {
-			durationSoFarNano := time.Now().Sub(startTS)
-			fmt.Printf("%d unique out of %d processed so far [%dms]\n", countUnique, countTotal, durationSoFarNano/time.Millisecond)
-		}
+		//if countTotal%1000 == 0 {
+		//	durationSoFarNano := time.Now().Sub(startTS)
+		//	fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", tree.Size(), countTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
+		//}
 	}
 
-	fmt.Printf("%d unique out of %d processed FINAL\n", countUnique, countTotal)
+	durationNano := time.Now().Sub(startTS)
+	fmt.Printf("%d unique out of %d processed\n", tree.Size(), countTotal)
+	fmt.Printf("%d branch factor: %d num nodes in b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, tree.NumTotalNodes(), tree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
 	//sort.Strings(m)
 	//for i := 0; i < len(m); i++ {
 	//	fmt.Printf("contributor name: %s\n", m[i])

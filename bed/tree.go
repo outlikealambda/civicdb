@@ -2,6 +2,7 @@ package bed
 
 import (
 	"fmt"
+	//"github.com/megesdal/melodispurences/damerau"
 	"math"
 	"strings"
 )
@@ -30,6 +31,38 @@ func intMin(a int, b int) int {
 
 func intAbs(a int) int {
 	return int(math.Abs(float64(a)))
+}
+
+func (tree *BPlusTree) NumTotalNodes() int {
+	return recNumNodes(tree.root, func(*BPlusTreeNode) int {
+		return 1
+	})
+}
+
+func (tree *BPlusTree) NumLeafNodes() int {
+	return recNumNodes(tree.root, func(node *BPlusTreeNode) int {
+		if node.isLeafNode() {
+			return 1
+		}
+		return 0
+	})
+}
+
+func (tree *BPlusTree) Size() int {
+	return recNumNodes(tree.root, func(node *BPlusTreeNode) int {
+		if node.isLeafNode() {
+			return len(node.splits)
+		}
+		return 0
+	})
+}
+
+func recNumNodes(parent *BPlusTreeNode, count func(*BPlusTreeNode) int) int {
+	total := count(parent)
+	for _, child := range parent.children {
+		total += recNumNodes(child, count)
+	}
+	return total
 }
 
 func VerifyEditDistance(s1 string, s2 string, distanceThreshold int) bool {
@@ -260,6 +293,70 @@ func childrenStr(node *BPlusTreeNode) string {
 	return strings.Join(rv, ",")
 }
 
+// TODO: figure out why this isn't working
+// TODO: I'd like to get this so it didn't depend on q and addToNew is computed outside
+/*func splitIfNecessary(parent *BPlusTreeNode, q string) (*BPlusTreeNode, bool) {
+
+	shouldSplit := false
+	if len(parent.splits) == parent.tree.branchFactor-1 {
+		shouldSplit = true
+	}
+
+	if shouldSplit {
+		return nil, false
+	}
+
+	//fmt.Println(indent, "Splitting before adding child node")
+	newNode := parent.tree.createTreeNode()
+	addToNew := false
+
+	//childSplitIdx := int(math.Ceil(float64(parent.tree.branchFactor) / 2))
+	splitIdx := int(math.Floor(float64(parent.tree.branchFactor) / 2))
+	if parent.tree.branchFactor == 2 {
+		// only one of the two nodes will have room...
+		if compare(q, parent.splits[0]) < 0 {
+			//fmt.Println(indent, "decrementing splitIdx", splitIdx, splitIdx - 1)
+			splitIdx--
+		} else {
+			addToNew = true
+		}
+	}
+
+	if splitIdx < len(parent.splits) {
+		//fmt.Printf("%s splitting '%s' at %d\n", indent, strings.Join(parent.splits, ""), splitIdx)
+
+		if parent.isLeafNode() {
+			newNode.splits = make([]string, len(parent.splits)-splitIdx)
+			copy(newNode.splits, parent.splits[splitIdx:])
+		} else {
+			newNode.splits = make([]string, len(parent.splits)-splitIdx-1)
+			copy(newNode.splits, parent.splits[splitIdx+1:])
+		}
+
+		if compare(q, parent.splits[splitIdx]) >= 0 {
+			addToNew = true
+		}
+		parent.splits = parent.splits[:splitIdx]
+	} // else is branchFactor = 2 (binary tree)
+
+	//fmt.Printf("%s split: '%s' %d | '%s' %d \n", indent, strings.Join(parent.splits, ""), len(parent.splits), strings.Join(newNode.splits, ""), len(newNode.splits))
+
+	if len(parent.children) > 0 {
+		childSplitIdx := splitIdx + 1
+		//fmt.Println(indent, "child split index", childSplitIdx)
+		newNode.children = make([]*BPlusTreeNode, len(parent.children)-childSplitIdx)
+		copy(newNode.children, parent.children[childSplitIdx:])
+		for i := 0; i < len(newNode.children); i++ {
+			newNode.children[i].parent = newNode
+			newNode.children[i].parentChildIdx = i
+		}
+		parent.children = parent.children[:childSplitIdx]
+		//fmt.Println(indent, "children:", childrenStr(parent), len(parent.children), "|", childrenStr(newNode), len(newNode.children))
+	}
+
+	return newNode, addToNew
+}*/
+
 func recInsert(q string, parent *BPlusTreeNode, child *BPlusTreeNode) {
 
 	indent := ""
@@ -343,11 +440,24 @@ func recInsert(q string, parent *BPlusTreeNode, child *BPlusTreeNode) {
 
 	insertIdx := len(nodeToInsert.splits)
 	//fmt.Printf("Initial insert index to insert %s is %d\n", q, insertIdx)
+
+	performInsert := true
 	for i, n := 0, len(nodeToInsert.splits); i < n; i++ {
 		//fmt.Printf("Comparing '%s' to '%s'\n", q, nodeToInsert.splits[i])
-		if compare(q, nodeToInsert.splits[i]) < 0 {
+
+		cmpVal := compare(q, nodeToInsert.splits[i])
+		if cmpVal < 0 {
 			insertIdx = i
 			break
+		} else if cmpVal == 0 {
+			if child == nil {
+				// duplicate strategy for leaf nodes?
+				// 1. just insert anyway
+				// 2. ignore
+				// 3. merge into data (if it is a leaf node)
+				performInsert = false
+				break
+			}
 		}
 	}
 	//fmt.Printf("Planning to insert %s at idx %d\n", q, insertIdx)
@@ -362,7 +472,8 @@ func recInsert(q string, parent *BPlusTreeNode, child *BPlusTreeNode) {
 			}
 
 			//fmt.Println("comparing", q, nodeWithSplitValue.splits[0])
-			if compare(q, nodeWithSplitValue.splits[0]) >= 0 {
+			cmpVal := compare(q, nodeWithSplitValue.splits[0])
+			if cmpVal >= 0 {
 				insertIdx++
 			}
 		}
@@ -386,7 +497,7 @@ func recInsert(q string, parent *BPlusTreeNode, child *BPlusTreeNode) {
 		insertIdx--
 	}
 
-	if insertIdx >= 0 {
+	if performInsert && insertIdx >= 0 {
 		if insertIdx < len(nodeToInsert.splits) {
 			//fmt.Printf("Modifiying SPLIT %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits, ""), len(nodeToInsert.splits), cap(nodeToInsert.splits))
 			//fmt.Printf("Moving SPLIT from %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits[insertIdx:], ""), len(nodeToInsert.splits[insertIdx:]), cap(nodeToInsert.splits[insertIdx:]))
@@ -662,7 +773,7 @@ func recRangeQuery(q string, node *BPlusTreeNode, distanceThreshold int, smin st
 	return results
 }
 
-func compare(a string, b string) int {
+func compareDictionaryOrder(a string, b string) int {
 	if len(a) < len(b) {
 		return -1
 	} else if len(a) > len(b) {
@@ -678,4 +789,14 @@ func compare(a string, b string) int {
 	}
 
 	return 0
+}
+
+func compare(a string, b string) int {
+
+	//if float64(damerau.DamerauLevenshteinDistance(a, b))/math.Max(float64(len(a)), float64(len(b))) < 0.1 {
+	//if VerifyEditDistance(a, b, int(0.1*float64(intMax(len(a), len(b))))) {
+	//	return 0
+	//}
+
+	return compareDictionaryOrder(a, b)
 }
