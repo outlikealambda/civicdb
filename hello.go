@@ -24,6 +24,7 @@ func main() {
 	fmt.Printf("hello, world\n")
 
 	groupByAddress()
+	simpleDamerau()
 
 	return
 }
@@ -108,7 +109,7 @@ func simpleDamerau() {
 	//m := []string{}
 	//normThreshold := 0.2
 	branchFactor := 32
-	tree := bed.New(branchFactor)
+	tree := bed.New(branchFactor, bed.CreateCompareEditDistance(0.1))
 
 	for true {
 		fields, err := csvReader.Read()
