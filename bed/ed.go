@@ -44,8 +44,19 @@ func VerifyEditDistance(s1 string, s2 string, distanceThreshold int) bool {
 }
 
 func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int) bool {
+
+	if len(smax) == 0 {
+		return intAbs(len(smin)-len(q)) <= distanceThreshold
+	}
+
 	lcp := longestCommonPrefix(smin, smax)
 	nlcp := len(lcp)
+
+	if len(smax) == nlcp {
+		// smin and smax are the same... you can just do verify ed
+		return VerifyEditDistance(q, smax, distanceThreshold)
+	}
+
 	var cmin uint8
 	if len(smin) == nlcp {
 		cmin = '!' // \u0021... if I trim, do I need to go lower?
@@ -53,9 +64,6 @@ func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int)
 		cmin = smin[nlcp]
 	}
 
-	if len(smax) == nlcp {
-		return intMax(nlcp, len(q)) <= distanceThreshold
-	}
 	cmax := smax[nlcp]
 
 	lastRow, verified := createVerificationTable(nlcp+1, len(q), distanceThreshold, func(rowIdx int, colIdx int) bool {
