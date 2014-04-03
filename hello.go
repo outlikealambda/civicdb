@@ -92,6 +92,7 @@ func groupByAddress() {
 }
 
 func simpleDamerau() {
+
 	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
 	if err != nil {
 		log.Fatal(err)
@@ -107,18 +108,14 @@ func simpleDamerau() {
 	var queryDurationSum time.Duration
 	var insertDurationSum time.Duration
 
-	//m := []string{}
-	//normThreshold := 0.2
 	branchFactor := 32
 	lastNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
 	firstNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
-	//firstNameTree := bed.New(branchFactor, bed.CreateCompareEditDistance(0.1))
 	lastId := 0
 
 	for true {
-		//for i := 0; i < 100; i++ {
+
 		fields, err := csvReader.Read()
-		//fmt.Println(fields)
 		if err != nil {
 			if err != io.EOF {
 				log.Fatal(err)
@@ -138,14 +135,11 @@ func simpleDamerau() {
 			firstName = strings.Trim(firstLast[1], "\r\n\t ")
 		}
 
-		//lenToCheck := float64(len(toCheck))
-
 		beforeLastQueryTS := time.Now()
 		lastNameResults := lastNameTree.RangeQuery(lastName, 2)
 		queryDurationSum += time.Now().Sub(beforeLastQueryTS)
 
 		if len(lastNameResults) > 0 {
-			//fmt.Printf("%v\n", results)
 
 			var possibleIds map[int]bool
 			possibleLastNameResultIds := make(map[int]bool)
@@ -192,42 +186,22 @@ func simpleDamerau() {
 			}
 		}
 
-		/*for j := 0; j < len(m); j++ {
-
-			existing := m[j]
-			lenExisting := float64(len(existing))
-			distMax := math.Max(lenExisting, lenToCheck)
-
-			// if the minimum norm distance is greater than the threshold, don't bother
-			if math.Abs(lenExisting-lenToCheck)/distMax > normThreshold {
-				continue
-			}
-
-			normDist := float64(damerau.DamerauLevenshteinDistance(m[j], fields[2])) / distMax
-			if normDist <= normThreshold {
-				//if normDist > 0 {
-				//	fmt.Printf("  %f is value: %s vs. %s\n", normDist, existing, toCheck)
-				//}
-				found = true
-				break
-			}
-		}*/
-
-		// TODO: consolidate this to use multimap functionality of index
 		if foundId < 0 {
 			foundId = lastId
 			lastId++
 			countUnique++
-			beforeInsertTS := time.Now()
-			insertDurationSum += time.Now().Sub(beforeInsertTS)
-			//m = append(m, toCheck)
 		}
+
 		if firstName != "" && !exactMatchFN {
+			beforeInsertTS := time.Now()
 			firstNameTree.Put(firstName, foundId)
+			insertDurationSum += time.Now().Sub(beforeInsertTS)
 		}
 
 		if !exactMatchLN {
+			beforeInsertTS := time.Now()
 			lastNameTree.Put(lastName, foundId)
+			insertDurationSum += time.Now().Sub(beforeInsertTS)
 		}
 
 		countTotal++
@@ -245,10 +219,4 @@ func simpleDamerau() {
 
 	//fmt.Println(firstNameTree.String())
 	//fmt.Println(lastNameTree.String())
-
-	//sort.Strings(m)
-	//for i := 0; i < len(m); i++ {
-	//	fmt.Printf("contributor name: %s\n", m[i])
-	//}
-	//fmt.Printf("\n%d unique contributors out of %d entries", len(m), count)
 }
