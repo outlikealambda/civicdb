@@ -18,6 +18,7 @@ func CompareDictionaryOrder(a string, b string) int {
 	return 0
 }
 
+// TODO: this doesn't work... it misses if the distance if far from the split but close to a child that is "to the right" of the split
 func CreateCompareEditDistance(normDist float64) func(string, string) int {
 
 	return func(a string, b string) int {

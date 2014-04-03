@@ -14,19 +14,40 @@ func recToString(node *bPlusTreeNode) string {
 		return ""
 	}
 
-	parentStr := ""
-	if node.parent != nil {
-		parentStr += fmt.Sprintf("%s%d <-- ", revToString(node.parent), node.parentChildIdx)
-	}
-
-	childStr := ""
-	if node.children != nil && len(node.children) > 0 {
-		childStr = " --> " + childrenStr(node)
-	}
-
 	rv := ""
 	if node.isLeafNode() {
-		rv += parentStr + strings.Join(node.splits, "") + childStr + "\n"
+		parentStr := ""
+		if node.parent != nil {
+			parentStr += fmt.Sprintf("%s%d <-- ", revToString(node.parent), node.parentChildIdx)
+		}
+
+		splitStr := ""
+		for i, split := range node.splits {
+
+			splitStr += split
+
+			splitData := node.data[i]
+			dataStr := "["
+			foundNonNilData := false
+			first := true
+			for _, splitDatum := range splitData {
+				if first {
+					first = false
+				} else {
+					dataStr += ","
+				}
+				if splitDatum != nil {
+					foundNonNilData = true
+					dataStr += fmt.Sprintf("%v", splitDatum)
+				}
+			}
+			dataStr += "]"
+			if !foundNonNilData {
+				dataStr = ""
+			}
+			splitStr += dataStr
+		}
+		rv += parentStr + splitStr + "\n"
 	} else {
 		for i := 0; i < len(node.children); i++ {
 			rv += recToString(node.children[i])

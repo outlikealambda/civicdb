@@ -195,3 +195,47 @@ func TestTertiaryInsertDCBA(t *testing.T) {
 		t.Error("Not expected:\n", tertiaryBTree.String())
 	}
 }
+
+func TestTertiaryInsertDCBAWithData(t *testing.T) {
+	tertiaryBTree := New(3, CompareDictionaryOrder)
+
+	tertiaryBTree.Put("d", 1)
+	if tertiaryBTree.String() != "d[1]\n" {
+		t.Error("Expected: d[1], but was:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("c", 2)
+	if tertiaryBTree.String() != "c[2]d[1]\n" {
+		t.Error("Expected: c[2]d[1], but was:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("b", 3)
+	if tertiaryBTree.String() != "d0 <-- b[3]c[2]\nd1 <-- d[1]\n" {
+		t.Error("Expected: d0 <-- b[3]c[2], d1 <-- d[1], but was:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("a", 4)
+	if tertiaryBTree.String() != "cd0 <-- a[4]b[3]\ncd1 <-- c[2]\ncd2 <-- d[1]\n" {
+		t.Error("Not expected:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("a", 5)
+	if tertiaryBTree.String() != "cd0 <-- a[4,5]b[3]\ncd1 <-- c[2]\ncd2 <-- d[1]\n" {
+		t.Error("Expected: cd0 <-- a[4,5]b[3], cd1 <-- c[2], cd2 <-- d[1], but was:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("b", 6)
+	if tertiaryBTree.String() != "cd0 <-- a[4,5]b[3,6]\ncd1 <-- c[2]\ncd2 <-- d[1]\n" {
+		t.Error("Expected: cd0 <-- a[4,5]b[3,6], cd1 <-- c[2], cd2 <-- d[1]\n, but was:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("d", 7)
+	if tertiaryBTree.String() != "cd0 <-- a[4,5]b[3,6]\ncd1 <-- c[2]\ncd2 <-- d[1,7]\n" {
+		t.Error("Expected: cd0 <-- a[4,5]b[3,6], cd1 <-- c[2], cd2 <-- d[1,7], but was:\n", tertiaryBTree.String())
+	}
+
+	tertiaryBTree.Put("c", 8)
+	if tertiaryBTree.String() != "cd0 <-- a[4,5]b[3,6]\ncd1 <-- c[2,8]\ncd2 <-- d[1,7]\n" {
+		t.Error("Expected: cd0 <-- a[4,5]b[3,6], cd1 <-- c[2,8], cd2 <-- d[1,7], but was:\n", tertiaryBTree.String())
+	}
+}

@@ -1,5 +1,17 @@
 package bed
 
+type QueryResult struct {
+	Key    string
+	Values []interface{}
+}
+
+func (tree *BPlusTree) RangeQuery(q string, distanceThreshold int) []QueryResult {
+	results := make([]QueryResult, 0)
+	results = recRangeQuery(q, tree.root, distanceThreshold, "", "", results)
+	return results
+}
+
+/*
 func (tree *BPlusTree) RangeQuery(q string, distanceThreshold int) []string {
 	results := make([]string, 0) // length?
 	//resultsChan := make(chan string)
@@ -7,14 +19,13 @@ func (tree *BPlusTree) RangeQuery(q string, distanceThreshold int) []string {
 	results = recRangeQuery(q, tree.root, distanceThreshold, "", "", results)
 	//fmt.Printf("%v\n", results)
 	return results
-}
+}*/
 
-func recRangeQuery(q string, node *bPlusTreeNode, distanceThreshold int, smin string, smax string, results []string) []string {
+func recRangeQuery(q string, node *bPlusTreeNode, distanceThreshold int, smin string, smax string, results []QueryResult) []QueryResult {
 	if node.isLeafNode() {
-		for j := 0; j < len(node.splits); j++ {
-			sj := node.splits[j]
-			if VerifyEditDistance(q, sj, distanceThreshold) {
-				results = append(results, sj)
+		for j, split := range node.splits {
+			if VerifyEditDistance(q, split, distanceThreshold) {
+				results = append(results, QueryResult{split, node.data[j]})
 			}
 		}
 	} else {

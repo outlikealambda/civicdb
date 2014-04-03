@@ -23,7 +23,7 @@ type Person struct {
 func main() {
 	fmt.Printf("hello, world\n")
 
-	groupByAddress()
+	//groupByAddress()
 	simpleDamerau()
 
 	return
@@ -98,21 +98,27 @@ func simpleDamerau() {
 	}
 
 	csvReader := csv.NewReader(file)
+	csvReader.Read()
 
 	startTS := time.Now()
 	countTotal := 0
 	countUnique := 0
 
-	//var queryDurationSum time.Duration
+	var queryDurationSum time.Duration
 	var insertDurationSum time.Duration
 
 	//m := []string{}
 	//normThreshold := 0.2
 	branchFactor := 32
-	tree := bed.New(branchFactor, bed.CreateCompareEditDistance(0.1))
+	lastNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
+	firstNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
+	//firstNameTree := bed.New(branchFactor, bed.CreateCompareEditDistance(0.1))
+	lastId := 0
 
 	for true {
+		//for i := 0; i < 100; i++ {
 		fields, err := csvReader.Read()
+		//fmt.Println(fields)
 		if err != nil {
 			if err != io.EOF {
 				log.Fatal(err)
@@ -120,17 +126,71 @@ func simpleDamerau() {
 			break
 		}
 
-		found := false
+		foundId := -1
+		exactMatchLN := false
+		exactMatchFN := false
 		toCheck := fields[2]
+		firstLast := strings.SplitN(toCheck, ",", 2)
+
+		lastName := strings.Trim(firstLast[0], "\r\n\t ")
+		var firstName string
+		if len(firstLast) == 2 {
+			firstName = strings.Trim(firstLast[1], "\r\n\t ")
+		}
+
 		//lenToCheck := float64(len(toCheck))
 
-		//beforeQueryTS := time.Now()
-		//results := tree.RangeQuery(toCheck, 5)
-		//queryDurationSum += time.Now().Sub(beforeQueryTS)
-		//if len(results) > 0 {
-		//fmt.Printf("%v\n", results)
-		//found = true
-		//}
+		beforeLastQueryTS := time.Now()
+		lastNameResults := lastNameTree.RangeQuery(lastName, 2)
+		queryDurationSum += time.Now().Sub(beforeLastQueryTS)
+
+		if len(lastNameResults) > 0 {
+			//fmt.Printf("%v\n", results)
+
+			var possibleIds map[int]bool
+			possibleLastNameResultIds := make(map[int]bool)
+			for _, lastNameResult := range lastNameResults {
+				for _, lastNameResultId := range lastNameResult.Values {
+					possibleLastNameResultIds[lastNameResultId.(int)] = lastNameResult.Key == lastName
+				}
+			}
+
+			if firstName != "" {
+
+				beforeFirstQueryTS := time.Now()
+				firstNameResults := firstNameTree.RangeQuery(firstName, 2)
+				queryDurationSum += time.Now().Sub(beforeFirstQueryTS)
+
+				if len(firstNameResults) > 0 {
+					possibleIds = make(map[int]bool)
+					for _, firstNameResult := range firstNameResults {
+						for _, firstNameResultId := range firstNameResult.Values {
+							// find intersection...
+							_, existsInLastName := possibleLastNameResultIds[firstNameResultId.(int)]
+							if existsInLastName {
+								possibleIds[firstNameResultId.(int)] = firstNameResult.Key == firstName
+							}
+						}
+					}
+				}
+			} else {
+				possibleIds = possibleLastNameResultIds
+			}
+
+			if len(possibleIds) > 0 {
+				// pick a better id...
+				for possibleId, exactMatch := range possibleIds {
+					foundId = possibleId
+					if firstName != "" {
+						exactMatchFN = exactMatch
+						exactMatchLN = possibleLastNameResultIds[possibleId]
+					} else {
+						exactMatchLN = exactMatch
+					}
+					break
+				}
+			}
+		}
 
 		/*for j := 0; j < len(m); j++ {
 
@@ -153,24 +213,39 @@ func simpleDamerau() {
 			}
 		}*/
 
-		if !found {
+		// TODO: consolidate this to use multimap functionality of index
+		if foundId < 0 {
+			foundId = lastId
+			lastId++
 			countUnique++
 			beforeInsertTS := time.Now()
-			tree.Insert(toCheck)
 			insertDurationSum += time.Now().Sub(beforeInsertTS)
 			//m = append(m, toCheck)
 		}
+		if firstName != "" && !exactMatchFN {
+			firstNameTree.Put(firstName, foundId)
+		}
+
+		if !exactMatchLN {
+			lastNameTree.Put(lastName, foundId)
+		}
+
 		countTotal++
 
-		//if countTotal%1000 == 0 {
-		//	durationSoFarNano := time.Now().Sub(startTS)
-		//	fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", tree.Size(), countTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
-		//}
+		if countTotal%1000 == 0 {
+			durationSoFarNano := time.Now().Sub(startTS)
+			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", lastNameTree.Size(), countTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
+		}
 	}
 
 	durationNano := time.Now().Sub(startTS)
-	fmt.Printf("%d unique out of %d processed\n", tree.Size(), countTotal)
-	fmt.Printf("%d branch factor: %d num nodes in b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, tree.NumTotalNodes(), tree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
+	fmt.Printf("%d unique out of %d processed\n", countUnique, countTotal)
+	fmt.Printf("%d branch factor: %d num nodes in firstName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, firstNameTree.NumTotalNodes(), firstNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
+	fmt.Printf("%d branch factor: %d num nodes in lastName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, lastNameTree.NumTotalNodes(), lastNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
+
+	//fmt.Println(firstNameTree.String())
+	//fmt.Println(lastNameTree.String())
+
 	//sort.Strings(m)
 	//for i := 0; i < len(m); i++ {
 	//	fmt.Printf("contributor name: %s\n", m[i])

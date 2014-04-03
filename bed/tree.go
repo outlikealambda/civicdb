@@ -2,6 +2,7 @@ package bed
 
 import (
 	//"github.com/megesdal/melodispurences/damerau"
+	//"fmt"
 	"math"
 )
 
@@ -16,8 +17,8 @@ type bPlusTreeNode struct {
 	parent         *bPlusTreeNode
 	parentChildIdx int
 	splits         []string         // size m
-	children       []*bPlusTreeNode // size m + 1
-	data           [][]string       // size m x n (leaf only)
+	children       []*bPlusTreeNode // size m + 1 (internal only)
+	data           [][]interface{}  // size m x n (leaf only)
 }
 
 func intMax(a int, b int) int {
@@ -44,17 +45,22 @@ func New(b int, compare func(string, string) int) *BPlusTree {
 	return tree
 }
 
+func (tree *BPlusTree) Insert(key string) {
+	nodeToInsert := tree.recFindNode(key, tree.root)
+	tree.recInsert(key, nodeToInsert, nil, nil)
+}
+
+func (tree *BPlusTree) Put(key string, value interface{}) {
+	nodeToInsert := tree.recFindNode(key, tree.root)
+	tree.recInsert(key, nodeToInsert, value, nil)
+}
+
 func (tree *BPlusTree) createTreeNode() *bPlusTreeNode {
 	node := new(bPlusTreeNode)
 	//node.tree = tree
 	node.splits = make([]string, 0, tree.branchFactor-1)
 	node.children = make([]*bPlusTreeNode, 0, tree.branchFactor)
 	return node
-}
-
-func (tree *BPlusTree) Insert(q string) {
-	nodeToInsert := tree.recFindNode(q, tree.root)
-	tree.recInsert(q, nodeToInsert, nil)
 }
 
 func (tree *BPlusTree) addToParentNode(parent *bPlusTreeNode, child *bPlusTreeNode) {
@@ -81,33 +87,31 @@ func (tree *BPlusTree) addToParentNode(parent *bPlusTreeNode, child *bPlusTreeNo
 			tree.root = newRoot
 			//fmt.Println("new root...", revToString(newRoot.children[0]), revToString(newRoot.children[1]))
 		} else {
-			tree.recInsert(splitValue, parent, child)
+			tree.recInsert(splitValue, parent, nil, child)
 		}
 	}
 }
 
-// TODO: figure out why this isn't working
-// TODO: I'd like to get this so it didn't depend on q and addToNew is computed outside
-/*func splitIfNecessary(parent *bPlusTreeNode, q string) (*bPlusTreeNode, bool) {
+func (tree *BPlusTree) splitIfNecessary(parent *bPlusTreeNode, q string) (*bPlusTreeNode, bool) {
 
 	shouldSplit := false
-	if len(parent.splits) == parent.tree.branchFactor-1 {
+	if len(parent.splits) == tree.branchFactor-1 {
 		shouldSplit = true
 	}
 
-	if shouldSplit {
+	if !shouldSplit {
 		return nil, false
 	}
 
 	//fmt.Println(indent, "Splitting before adding child node")
-	newNode := parent.tree.createTreeNode()
+	newNode := tree.createTreeNode()
 	addToNew := false
 
 	//childSplitIdx := int(math.Ceil(float64(parent.tree.branchFactor) / 2))
-	splitIdx := int(math.Floor(float64(parent.tree.branchFactor) / 2))
-	if parent.tree.branchFactor == 2 {
+	splitIdx := int(math.Floor(float64(tree.branchFactor) / 2))
+	if tree.branchFactor == 2 {
 		// only one of the two nodes will have room...
-		if compare(q, parent.splits[0]) < 0 {
+		if tree.compare(q, parent.splits[0]) < 0 {
 			//fmt.Println(indent, "decrementing splitIdx", splitIdx, splitIdx - 1)
 			splitIdx--
 		} else {
@@ -121,12 +125,16 @@ func (tree *BPlusTree) addToParentNode(parent *bPlusTreeNode, child *bPlusTreeNo
 		if parent.isLeafNode() {
 			newNode.splits = make([]string, len(parent.splits)-splitIdx)
 			copy(newNode.splits, parent.splits[splitIdx:])
+
+			newNode.data = make([][]interface{}, len(parent.splits)-splitIdx)
+			copy(newNode.data, parent.data[splitIdx:])
+			parent.data = parent.data[:splitIdx]
 		} else {
 			newNode.splits = make([]string, len(parent.splits)-splitIdx-1)
 			copy(newNode.splits, parent.splits[splitIdx+1:])
 		}
 
-		if compare(q, parent.splits[splitIdx]) >= 0 {
+		if tree.compare(q, parent.splits[splitIdx]) >= 0 {
 			addToNew = true
 		}
 		parent.splits = parent.splits[:splitIdx]
@@ -134,23 +142,23 @@ func (tree *BPlusTree) addToParentNode(parent *bPlusTreeNode, child *bPlusTreeNo
 
 	//fmt.Printf("%s split: '%s' %d | '%s' %d \n", indent, strings.Join(parent.splits, ""), len(parent.splits), strings.Join(newNode.splits, ""), len(newNode.splits))
 
-	if len(parent.children) > 0 {
+	if !parent.isLeafNode() {
 		childSplitIdx := splitIdx + 1
 		//fmt.Println(indent, "child split index", childSplitIdx)
 		newNode.children = make([]*bPlusTreeNode, len(parent.children)-childSplitIdx)
 		copy(newNode.children, parent.children[childSplitIdx:])
-		for i := 0; i < len(newNode.children); i++ {
-			newNode.children[i].parent = newNode
-			newNode.children[i].parentChildIdx = i
+		for i, child := range newNode.children {
+			child.parent = newNode
+			child.parentChildIdx = i
 		}
 		parent.children = parent.children[:childSplitIdx]
 		//fmt.Println(indent, "children:", childrenStr(parent), len(parent.children), "|", childrenStr(newNode), len(newNode.children))
 	}
 
 	return newNode, addToNew
-}*/
+}
 
-func (tree *BPlusTree) recInsert(q string, parent *bPlusTreeNode, child *bPlusTreeNode) {
+func (tree *BPlusTree) recInsert(q string, parent *bPlusTreeNode, v interface{}, child *bPlusTreeNode) {
 
 	indent := ""
 	node := parent.parent
@@ -159,103 +167,44 @@ func (tree *BPlusTree) recInsert(q string, parent *bPlusTreeNode, child *bPlusTr
 		node = node.parent
 	}
 
-	nodeToInsert := parent
-	//fmt.Println(indent, "Parent node", revToString(parent))
-	var newNode *bPlusTreeNode
-
-	shouldSplit := false
-	if len(nodeToInsert.splits) == tree.branchFactor-1 {
-		shouldSplit = true
-	}
-
-	if shouldSplit {
-
-		//fmt.Println(indent, "Splitting before adding child node")
-		newNode = tree.createTreeNode()
-		//childSplitIdx := int(math.Ceil(float64(parent.tree.branchFactor) / 2))
-		splitIdx := int(math.Floor(float64(tree.branchFactor) / 2))
-
-		addToNew := false
-		if tree.branchFactor == 2 {
-			// only one of the two nodes will have room...
-			if tree.compare(q, parent.splits[0]) < 0 {
-				//fmt.Println(indent, "decrementing splitIdx", splitIdx, splitIdx - 1)
-				splitIdx--
-			} else {
-				addToNew = true
-			}
-		}
-
-		if splitIdx < len(nodeToInsert.splits) {
-			//fmt.Printf("%s splitting '%s' at %d\n", indent, strings.Join(nodeToInsert.splits, ""), splitIdx)
-
-			if nodeToInsert.isLeafNode() {
-				newNode.splits = make([]string, len(nodeToInsert.splits)-splitIdx)
-				copy(newNode.splits, nodeToInsert.splits[splitIdx:])
-			} else {
-				newNode.splits = make([]string, len(nodeToInsert.splits)-splitIdx-1)
-				copy(newNode.splits, nodeToInsert.splits[splitIdx+1:])
-			}
-
-			if tree.compare(q, nodeToInsert.splits[splitIdx]) >= 0 {
-				addToNew = true
-			}
-			nodeToInsert.splits = nodeToInsert.splits[:splitIdx]
-		} // else is branchFactor = 2 (binary tree)
-
-		//fmt.Printf("%s split: '%s' %d | '%s' %d \n", indent, strings.Join(nodeToInsert.splits, ""), len(nodeToInsert.splits), strings.Join(newNode.splits, ""), len(newNode.splits))
-
-		if child != nil {
-			childSplitIdx := splitIdx + 1
-			//fmt.Println(indent, "child split index", childSplitIdx)
-			newNode.children = make([]*bPlusTreeNode, len(nodeToInsert.children)-childSplitIdx)
-			copy(newNode.children, nodeToInsert.children[childSplitIdx:])
-			for i := 0; i < len(newNode.children); i++ {
-				newNode.children[i].parent = newNode
-				newNode.children[i].parentChildIdx = i
-			}
-			nodeToInsert.children = nodeToInsert.children[:childSplitIdx]
-			//fmt.Println(indent, "children:", childrenStr(parent), len(parent.children), "|", childrenStr(newNode), len(newNode.children))
-		}
-
-		if addToNew {
-			nodeToInsert = newNode
-			//fmt.Printf("Now adding %s to new node\n", q)
-		}
-	}
-
-	//fmt.Printf("%s Finding insertIdx for %s among %s\n", indent, q, revToString(nodeToInsert))
-	if child != nil {
-		//fmt.Printf("%s   Child is %s\n", indent, revToString(child))
-	} else {
-		//fmt.Printf("%s   No Child\n", indent)
-	}
-
-	insertIdx := len(nodeToInsert.splits)
-	//fmt.Printf("Initial insert index to insert %s is %d\n", q, insertIdx)
-
-	performInsert := true
-	for i, n := 0, len(nodeToInsert.splits); i < n; i++ {
+	insertIdx, performInsert := len(parent.splits), true
+	for i, split := range parent.splits {
 		//fmt.Printf("Comparing '%s' to '%s'\n", q, nodeToInsert.splits[i])
 
-		cmpVal := tree.compare(q, nodeToInsert.splits[i])
+		cmpVal := tree.compare(q, split)
 		if cmpVal < 0 {
 			insertIdx = i
 			break
 		} else if cmpVal == 0 {
 			if child == nil {
-				// duplicate strategy for leaf nodes?
-				// 1. just insert anyway
-				// 2. ignore
-				// 3. merge into data (if it is a leaf node)
+				// duplicate in a leaf node...
+				// merge into existing data
+				insertIdx = i
 				performInsert = false
 				break
 			}
 		}
 	}
+
+	nodeToInsert := parent
+	var newNode *bPlusTreeNode
+	addToNew := false
+	if performInsert {
+		newNode, addToNew = tree.splitIfNecessary(parent, q)
+		if addToNew {
+			nodeToInsert = newNode
+			insertIdx -= len(parent.splits)
+			if len(newNode.children) > 0 {
+				insertIdx -= 1
+			}
+		}
+	}
+
 	//fmt.Printf("Planning to insert %s at idx %d\n", q, insertIdx)
 
 	if child != nil {
+
+		//fmt.Printf("%s   Child is %s\n", indent, revToString(child))
 
 		// now I need to compare and see which one promotes the split
 		if len(nodeToInsert.children) > 0 {
@@ -288,27 +237,13 @@ func (tree *BPlusTree) recInsert(q string, parent *bPlusTreeNode, child *bPlusTr
 			child.parentChildIdx = insertIdx
 		}
 		insertIdx--
+	} else {
+		//fmt.Printf("%s   No Child\n", indent)
+		addValueToNode(nodeToInsert, v, insertIdx, !performInsert)
 	}
 
 	if performInsert && insertIdx >= 0 {
-		if insertIdx < len(nodeToInsert.splits) {
-			//fmt.Printf("Modifiying SPLIT %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits, ""), len(nodeToInsert.splits), cap(nodeToInsert.splits))
-			//fmt.Printf("Moving SPLIT from %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits[insertIdx:], ""), len(nodeToInsert.splits[insertIdx:]), cap(nodeToInsert.splits[insertIdx:]))
-			//fmt.Printf("Moving SPLIT onto %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits[insertIdx+1:], ""), len(nodeToInsert.splits[insertIdx+1:]), cap(nodeToInsert.splits[insertIdx+1:]))
-			nodeToInsert.splits = append(nodeToInsert.splits, " ")
-			copy(nodeToInsert.splits[insertIdx+1:], nodeToInsert.splits[insertIdx:])
-			//fmt.Printf("After copy SPLIT %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits, ""), len(nodeToInsert.splits), cap(nodeToInsert.splits))
-			nodeToInsert.splits[insertIdx] = q
-			//fmt.Printf("Inserting SPLIT %s at %d: %s\n", q, insertIdx, strings.Join(nodeToInsert.splits, ""))
-			if insertIdx == 0 && nodeToInsert.parent != nil && nodeToInsert.parentChildIdx > 0 {
-				// update parent split for this node in nodeToInsert.parent.splits
-				nodeToInsert.parent.splits[nodeToInsert.parentChildIdx-1] = q
-				//fmt.Println("Updating parent split to", q, revToString(nodeToInsert))
-			}
-		} else {
-			nodeToInsert.splits = append(nodeToInsert.splits, q)
-			//fmt.Printf("Inserting SPLIT %s at end (%d): %s\n", q, insertIdx, strings.Join(nodeToInsert.splits, ""))
-		}
+		addKeyToNode(nodeToInsert, q, insertIdx)
 	} else {
 		//fmt.Println("Skipping SPLIT")
 	}
@@ -322,6 +257,50 @@ func (tree *BPlusTree) recInsert(q string, parent *bPlusTreeNode, child *bPlusTr
 	}
 }
 
+func addValueToNode(nodeToInsert *bPlusTreeNode, v interface{}, insertIdx int, merge bool) {
+	if merge {
+		//fmt.Printf("%d %v %v\n", insertIdx, v, nodeToInsert.data)
+		nodeToInsert.data[insertIdx] = append(nodeToInsert.data[insertIdx], v)
+	} else {
+		data := make([]interface{}, 1)
+		data[0] = v
+		if insertIdx < len(nodeToInsert.data) {
+			//fmt.Printf("Modifiying DATA %v  with len=%d and cap=%d\n", nodeToInsert.data, len(nodeToInsert.data), cap(nodeToInsert.data))
+			//fmt.Printf("Moving DATA from %v with len=%d and cap=%d\n", nodeToInsert.data[insertIdx:], len(nodeToInsert.data[insertIdx:]), cap(nodeToInsert.data[insertIdx:]))
+			//fmt.Printf("Moving DATA onto %v with len=%d and cap=%d\n", nodeToInsert.data[insertIdx+1:], len(nodeToInsert.data[insertIdx+1:]), cap(nodeToInsert.data[insertIdx+1:]))
+			nodeToInsert.data = append(nodeToInsert.data, nil)
+			copy(nodeToInsert.data[insertIdx+1:], nodeToInsert.data[insertIdx:])
+			//fmt.Printf("After copy DATA %v with len=%d and cap=%d\n", nodeToInsert.data, len(nodeToInsert.data), cap(nodeToInsert.data))
+			nodeToInsert.data[insertIdx] = data
+			//fmt.Printf("Inserting DATA %v at %d: %v\n", v, insertIdx, nodeToInsert.data)
+		} else {
+			nodeToInsert.data = append(nodeToInsert.data, data)
+			//fmt.Printf("Inserting DATA %v at end (%d): %v\n", v, insertIdx, nodeToInsert.data)
+		}
+	}
+}
+
+func addKeyToNode(nodeToInsert *bPlusTreeNode, q string, insertIdx int) {
+	if insertIdx < len(nodeToInsert.splits) {
+		//fmt.Printf("Modifiying SPLIT %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits, ""), len(nodeToInsert.splits), cap(nodeToInsert.splits))
+		//fmt.Printf("Moving SPLIT from %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits[insertIdx:], ""), len(nodeToInsert.splits[insertIdx:]), cap(nodeToInsert.splits[insertIdx:]))
+		//fmt.Printf("Moving SPLIT onto %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits[insertIdx+1:], ""), len(nodeToInsert.splits[insertIdx+1:]), cap(nodeToInsert.splits[insertIdx+1:]))
+		nodeToInsert.splits = append(nodeToInsert.splits, " ")
+		copy(nodeToInsert.splits[insertIdx+1:], nodeToInsert.splits[insertIdx:])
+		//fmt.Printf("After copy SPLIT %s with len=%d and cap=%d\n", strings.Join(nodeToInsert.splits, ""), len(nodeToInsert.splits), cap(nodeToInsert.splits))
+		nodeToInsert.splits[insertIdx] = q
+		//fmt.Printf("Inserting SPLIT %s at %d: %s\n", q, insertIdx, strings.Join(nodeToInsert.splits, ""))
+		if insertIdx == 0 && nodeToInsert.parent != nil && nodeToInsert.parentChildIdx > 0 {
+			// update parent split for this node in nodeToInsert.parent.splits
+			nodeToInsert.parent.splits[nodeToInsert.parentChildIdx-1] = q
+			//fmt.Println("Updating parent split to", q, revToString(nodeToInsert))
+		}
+	} else {
+		nodeToInsert.splits = append(nodeToInsert.splits, q)
+		//fmt.Printf("Inserting SPLIT %s at end (%d): %s\n", q, insertIdx, strings.Join(nodeToInsert.splits, ""))
+	}
+}
+
 func (node *bPlusTreeNode) isLeafNode() bool {
 	return len(node.children) == 0
 }
@@ -332,9 +311,8 @@ func (tree *BPlusTree) recFindNode(q string, node *bPlusTreeNode) *bPlusTreeNode
 		return node
 	}
 
-	for j := 0; j < len(node.splits); j++ {
-		sj := node.splits[j]
-		if tree.compare(q, sj) < 0 {
+	for j, split := range node.splits {
+		if tree.compare(q, split) < 0 {
 			return tree.recFindNode(q, node.children[j])
 		}
 	}
