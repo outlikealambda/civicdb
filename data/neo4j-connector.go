@@ -1,8 +1,8 @@
 package data
 
 import (
-	"fmt"
 	"github.com/jmcvetta/neoism"
+	"log"
 )
 
 type Neo4jConnection struct {
@@ -12,7 +12,7 @@ type Neo4jConnection struct {
 func ConnectGraphDb() *Neo4jConnection {
 	db, err := neoism.Connect("http://localhost:7474/db/data")
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 	return &Neo4jConnection{db: db}
 }
@@ -42,11 +42,11 @@ func (graph *Neo4jConnection) PopulateGraphWithPersonContribution(person *Person
 
 	nodePerson, err := graph.db.CreateNode(neoism.Props{"lastName": person.LastName})
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 	nodeContribution, err2 := graph.db.CreateNode(neoism.Props{"contributorType": contribution.ContributorType})
 	if err2 != nil {
-		fmt.Println(err2)
+		log.Println(err2)
 	}
 
 	// TODO: should the contribution be properties on the relation "contributed to"
