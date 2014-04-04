@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/megesdal/melodispurences/address"
 	"github.com/megesdal/melodispurences/bed"
+	"github.com/megesdal/melodispurences/data"
 	"io"
 	"log"
 	"math"
@@ -24,6 +25,8 @@ func main() {
 	fmt.Printf("hello, world\n")
 
 	runRangeQuery()
+	//groupByAddress()
+	//findContributorTypes()
 
 	return
 }
@@ -90,7 +93,7 @@ func groupByAddress() {
 	}
 }
 
-func runRangeQuery() {
+func findContributorTypes() {
 	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
 	if err != nil {
 		log.Fatal(err)
@@ -99,17 +102,7 @@ func runRangeQuery() {
 	csvReader := csv.NewReader(file)
 	csvReader.Read()
 
-	startTS := time.Now()
-	countTotal := 0
-	countUnique := 0
-
-	var queryDurationSum time.Duration
-	var insertDurationSum time.Duration
-
-	branchFactor := 32
-	lastNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
-	firstNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
-	lastId := 0
+	contributorTypes := make(map[string]bool)
 
 	for true {
 
@@ -121,9 +114,65 @@ func runRangeQuery() {
 			break
 		}
 
+		contributorTypes[fields[1]] = true
+	}
+
+	fmt.Println(contributorTypes)
+}
+
+func runRangeQuery() {
+
+	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	csvReader := csv.NewReader(file)
+	csvReader.Read()
+
+	startTS := time.Now()
+	countPersonTotal := 0
+	countPersonUnique := 0
+
+	var queryDurationSum time.Duration
+	var insertDurationSum time.Duration
+
+	branchFactor := 32
+	lastNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
+	firstNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
+	lastId := 0
+	people := make(map[int]*data.Person)
+	contributions := make([]*data.Contribution, 0)
+	//organizations := make(map[int]*data.Organization)
+	//pacs := make(map[int]*data.Committee)
+
+	graph := data.ConnectGraphDb()
+	graph.Clean()
+	for true {
+
+		fields, err := csvReader.Read()
+		if err != nil {
+			if err != io.EOF {
+				log.Fatal(err)
+			}
+			break
+		}
+
+		contribution := data.NewContribution()
+
 		foundId := -1
 		exactMatchLN := false
 		exactMatchFN := false
+		contributorType := fields[1]
+		isPerson := false
+		if contributorType == "Immediate Family" || contributorType == "Candidate" || contributorType == "Individual" {
+			isPerson = true
+		}
+
+		if !isPerson {
+			continue
+		}
+
 		toCheck := fields[2]
 		firstLast := strings.SplitN(toCheck, ",", 2)
 
@@ -186,9 +235,16 @@ func runRangeQuery() {
 
 		if foundId < 0 {
 			foundId = lastId
+			newPerson := data.NewPerson(firstName, lastName)
+			contribution.SetContributor(newPerson, contributorType)
+			people[foundId] = newPerson
+			graph.PopulateGraphWithPersonContribution(newPerson, contribution)
 			lastId++
-			countUnique++
+			countPersonUnique++
+		} else {
+			contribution.SetContributor(people[foundId], contributorType)
 		}
+		contributions = append(contributions, contribution)
 
 		if firstName != "" && !exactMatchFN {
 			beforeInsertTS := time.Now()
@@ -202,16 +258,16 @@ func runRangeQuery() {
 			insertDurationSum += time.Now().Sub(beforeInsertTS)
 		}
 
-		countTotal++
+		countPersonTotal++
 
-		if countTotal%100 == 0 {
+		if countPersonTotal%1000 == 0 {
 			durationSoFarNano := time.Now().Sub(startTS)
-			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", lastNameTree.Size(), countTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
+			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", lastNameTree.Size(), countPersonTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
 		}
 	}
 
 	durationNano := time.Now().Sub(startTS)
-	fmt.Printf("%d unique out of %d processed\n", countUnique, countTotal)
+	fmt.Printf("%d unique out of %d processed\n", countPersonUnique, countPersonTotal)
 	fmt.Printf("%d branch factor: %d num nodes in firstName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, firstNameTree.NumTotalNodes(), firstNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
 	fmt.Printf("%d branch factor: %d num nodes in lastName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, lastNameTree.NumTotalNodes(), lastNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
 
