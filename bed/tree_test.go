@@ -1,8 +1,8 @@
 package bed
 
 import (
+	// "fmt"
 	"testing"
-	//"fmt"
 )
 
 func TestRangeQuery(t *testing.T) {
@@ -11,14 +11,14 @@ func TestRangeQuery(t *testing.T) {
 	tertiaryBTree.Insert("Jim Gray")
 	tertiaryBTree.Insert("Jim Grey")
 
-	results := tertiaryBTree.RangeQuery("Jam Gray", 2)
+	results := tertiaryBTree.RangeQuery("Jam Gray", 0.25)
 	if len(results) != 2 {
-		t.Error("Expect: 2 query results for distance threshold of 2", len(results))
+		t.Error("Expect: 2 query results for distance threshold of 0.26", len(results))
 	}
 
 	// TODO
-	if len(tertiaryBTree.RangeQuery("Jam Gray", 1)) != 1 {
-		t.Error("Expect: 1 query result for distance threshold of 1", len(results))
+	if len(tertiaryBTree.RangeQuery("Jam Gray", 0.125)) != 1 {
+		t.Error("Expect: 1 query result for distance threshold of 0.13", len(results))
 	}
 
 	if len(tertiaryBTree.RangeQuery("Jim Gray", 0)) != 1 {
@@ -28,15 +28,15 @@ func TestRangeQuery(t *testing.T) {
 
 func TestVerify(t *testing.T) {
 
-	if !VerifyEditDistance("Jim Grey", "Jim Gay", 2) {
-		t.Error("Expect: Jim Grey and Jim Gay to be within 2 edits")
+	if success, distance := VerifyEditDistance("Jim Grey", "Jim Gay", 2); !success || distance != 2 {
+		t.Error("Expect: Jim Grey and Jim Gay to be within 2 edits.  Distance was: %v", distance)
 	}
 
-	if !VerifyEditDistance("Jim Grey", "Jim Grey", 0) {
-		t.Error("Expect: Jim Grey to be within 0 edits of itself")
+	if success, distance := VerifyEditDistance("Jim Grey", "Jim Grey", 0); !success || distance != 0 {
+		t.Error("Expect: Jim Grey to be within 0 edits of itself.  Distance was: %v", distance)
 	}
 
-	if VerifyEditDistance("Jim Grey", "Jim Gay", 1) {
+	if success, distance := VerifyEditDistance("Jim Grey", "Jim Gay", 1); success || distance != -1 {
 		t.Error("Expect: Jim Grey and Jim Gay to not be within 1 edit")
 	}
 }

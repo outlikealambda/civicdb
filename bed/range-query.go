@@ -1,48 +1,39 @@
 package bed
 
-type QueryResult struct {
-	Key    string
-	Values []interface{}
+type RangeResult struct {
+	Key      string
+	Values   []interface{}
+	Distance float64
 }
 
-func (tree *BPlusTree) RangeQuery(q string, distanceThreshold int) []QueryResult {
-	results := make([]QueryResult, 0)
+func (tree *BPlusTree) RangeQuery(q string, distanceThreshold float64) []RangeResult {
+	results := make([]RangeResult, 0)
 	results = recRangeQuery(q, tree.root, distanceThreshold, "", "", results)
 	return results
 }
 
-/*
-func (tree *BPlusTree) RangeQuery(q string, distanceThreshold int) []string {
-	results := make([]string, 0) // length?
-	//resultsChan := make(chan string)
-	// TODO: change to channels to parallelize the next bit
-	results = recRangeQuery(q, tree.root, distanceThreshold, "", "", results)
-	//fmt.Printf("%v\n", results)
-	return results
-}*/
-
-func recRangeQuery(q string, node *bPlusTreeNode, distanceThreshold int, smin string, smax string, results []QueryResult) []QueryResult {
+func recRangeQuery(q string, node *bPlusTreeNode, distanceThreshold float64, smin string, smax string, results []RangeResult) []RangeResult {
 	if node.isLeafNode() {
-		for j, split := range node.splits {
-			if VerifyEditDistance(q, split, distanceThreshold) {
-				results = append(results, QueryResult{split, node.data[j]})
+		for j, leaf := range node.splits {
+			if success, editDistance := VerifyEditDistance(q, leaf, denormalizeDistance(distanceThreshold, q, leaf)); success {
+				results = append(results, RangeResult{leaf, node.data[j], normalizeDistance(editDistance, q, leaf)})
 			}
 		}
 	} else {
 		if len(node.splits) > 0 {
-			if VerifyLowerBound(q, smin, node.splits[0], distanceThreshold) {
+			if VerifyLowerBound(q, smin, node.splits[0], denormalizeDistance(distanceThreshold, q, smin)) {
 				results = recRangeQuery(q, node.children[0], distanceThreshold, smin, node.splits[0], results)
 			}
 
 			for j, m := 1, len(node.splits); j < m; j++ {
-				if VerifyLowerBound(q, node.splits[j-1], node.splits[j], distanceThreshold) {
+				if VerifyLowerBound(q, node.splits[j-1], node.splits[j], denormalizeDistance(distanceThreshold, q, smin)) {
 					results = recRangeQuery(q, node.children[j], distanceThreshold, node.splits[j-1], node.splits[j], results)
 				}
 			}
 
 			// I want smax == "" to be interpretted like the last possible word in the alphabet?
 			// which would pretty much guarantee an lcp of 0, which the empty string achieves
-			if VerifyLowerBound(q, node.splits[len(node.splits)-1], smax, distanceThreshold) {
+			if VerifyLowerBound(q, node.splits[len(node.splits)-1], smax, denormalizeDistance(distanceThreshold, q, smin)) {
 				results = recRangeQuery(q, node.children[len(node.splits)], distanceThreshold, node.splits[len(node.splits)-1], smax, results)
 			}
 		} else {
@@ -52,4 +43,12 @@ func recRangeQuery(q string, node *bPlusTreeNode, distanceThreshold int, smin st
 		}
 	}
 	return results
+}
+
+func denormalizeDistance(threshold float64, si string, sj string) int {
+	return int(threshold * float64(intMax(len(si), len(sj))))
+}
+
+func normalizeDistance(editDistance int, si string, sj string) float64 {
+	return float64(editDistance) / float64(intMax(len(si), len(sj)))
 }

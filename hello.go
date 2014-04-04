@@ -23,8 +23,7 @@ type Person struct {
 func main() {
 	fmt.Printf("hello, world\n")
 
-	//groupByAddress()
-	simpleDamerau()
+	runRangeQuery()
 
 	return
 }
@@ -91,8 +90,7 @@ func groupByAddress() {
 	}
 }
 
-func simpleDamerau() {
-
+func runRangeQuery() {
 	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
 	if err != nil {
 		log.Fatal(err)
@@ -136,7 +134,7 @@ func simpleDamerau() {
 		}
 
 		beforeLastQueryTS := time.Now()
-		lastNameResults := lastNameTree.RangeQuery(lastName, 2)
+		lastNameResults := lastNameTree.RangeQuery(lastName, 0.2)
 		queryDurationSum += time.Now().Sub(beforeLastQueryTS)
 
 		if len(lastNameResults) > 0 {
@@ -152,7 +150,7 @@ func simpleDamerau() {
 			if firstName != "" {
 
 				beforeFirstQueryTS := time.Now()
-				firstNameResults := firstNameTree.RangeQuery(firstName, 2)
+				firstNameResults := firstNameTree.RangeQuery(firstName, 0.2)
 				queryDurationSum += time.Now().Sub(beforeFirstQueryTS)
 
 				if len(firstNameResults) > 0 {
@@ -206,7 +204,7 @@ func simpleDamerau() {
 
 		countTotal++
 
-		if countTotal%1000 == 0 {
+		if countTotal%100 == 0 {
 			durationSoFarNano := time.Now().Sub(startTS)
 			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", lastNameTree.Size(), countTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
 		}

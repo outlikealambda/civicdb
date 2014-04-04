@@ -1,5 +1,9 @@
 package bed
 
+import (
+// "fmt"
+)
+
 func CompareDictionaryOrder(a string, b string) int {
 	if len(a) < len(b) {
 		return -1
@@ -20,28 +24,24 @@ func CompareDictionaryOrder(a string, b string) int {
 
 // TODO: this doesn't work... it misses if the distance if far from the split but close to a child that is "to the right" of the split
 func CreateCompareEditDistance(normDist float64) func(string, string) int {
-
 	return func(a string, b string) int {
-		//if float64(damerau.DamerauLevenshteinDistance(a, b))/math.Max(float64(len(a)), float64(len(b))) < normDist {
-		if VerifyEditDistance(a, b, int(normDist*float64(intMax(len(a), len(b))))) {
-			return 0
-		}
-
 		return CompareDictionaryOrder(a, b)
 	}
 }
 
-func VerifyEditDistance(s1 string, s2 string, distanceThreshold int) bool {
+func VerifyEditDistance(s1 string, s2 string, distanceThreshold int) (bool, int) {
 
-	if intAbs(len(s1)-len(s2)) > distanceThreshold {
-		return false
+	if lengthDifference := intAbs(len(s1) - len(s2)); lengthDifference > distanceThreshold {
+		return false, -1
 	}
 
-	_, result := createVerificationTable(len(s1), len(s2), distanceThreshold, func(rowIdx int, colIdx int) bool {
+	_, result, editDistance := createVerificationTable(len(s1), len(s2), distanceThreshold, func(rowIdx int, colIdx int) bool {
 		return s1[rowIdx] == s2[colIdx]
 	})
 
-	return result
+	// fmt.Printf("%v/%v\n", s2, editDistance)
+
+	return result, editDistance
 }
 
 func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int) bool {
@@ -55,7 +55,8 @@ func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int)
 
 	if len(smax) == nlcp {
 		// smin and smax are the same... you can just do verify ed
-		return VerifyEditDistance(q, smax, distanceThreshold)
+		withinBounds, _ := VerifyEditDistance(q, smax, distanceThreshold)
+		return withinBounds
 	}
 
 	var cmin uint8
@@ -67,7 +68,7 @@ func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int)
 
 	cmax := smax[nlcp]
 
-	lastRow, verified := createVerificationTable(nlcp+1, len(q), distanceThreshold, func(rowIdx int, colIdx int) bool {
+	lastRow, verified, _ := createVerificationTable(nlcp+1, len(q), distanceThreshold, func(rowIdx int, colIdx int) bool {
 		if rowIdx < len(lcp) {
 			if lcp[rowIdx] != q[colIdx] {
 				return false
@@ -94,7 +95,7 @@ func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int)
 	return min <= distanceThreshold
 }
 
-func createVerificationTable(nrows int, ncols int, distanceThreshold int, compare func(int, int) bool) ([]int, bool) {
+func createVerificationTable(nrows int, ncols int, distanceThreshold int, compare func(int, int) bool) ([]int, bool, int) {
 
 	// construct tabel of 2 rows and len(s2) + 1 columns
 	table := make([][]int, 2)
@@ -124,10 +125,12 @@ func createVerificationTable(nrows int, ncols int, distanceThreshold int, compar
 		//fmt.Println(row)
 	*/
 	// i == 0 is the empty string... handled by init above
+
+	var m int
 	for i := 1; i < nrows+1; i++ {
 		start := intMax(0, i-distanceThreshold)
 		end := intMin(ncols+1, i+distanceThreshold+1)
-		m := distanceThreshold + 1
+		m = distanceThreshold + 1
 		//fmt.Println(start, end)
 		for j := start; j < end; j++ {
 			var d1 int
@@ -167,13 +170,13 @@ func createVerificationTable(nrows int, ncols int, distanceThreshold int, compar
 			//fmt.Println(row, "|", m)
 		*/
 		if m > distanceThreshold {
-			return table[1], false
+			return table[1], false, -1
 		}
 		for j, n := 0, ncols+1; j < n; j++ {
 			table[0][j] = table[1][j]
 		}
 	}
-	return table[0], true
+	return table[0], true, m
 }
 
 // longest common prefix
