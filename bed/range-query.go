@@ -6,6 +6,7 @@ type RangeResult struct {
 	Distance float64
 }
 
+// TODO: parallelize this...
 func (tree *BPlusTree) RangeQuery(q string, distanceThreshold float64) []RangeResult {
 	results := make([]RangeResult, 0)
 	results = recRangeQuery(q, tree.root, distanceThreshold, "", "", results)

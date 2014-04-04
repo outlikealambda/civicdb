@@ -47,7 +47,16 @@ func VerifyEditDistance(s1 string, s2 string, distanceThreshold int) (bool, int)
 func VerifyLowerBound(q string, smin string, smax string, distanceThreshold int) bool {
 
 	if len(smax) == 0 {
-		return intAbs(len(smin)-len(q)) <= distanceThreshold
+		// as long as it is to the right of smin...
+		return CompareDictionaryOrder(q, smin) >= 0
+	}
+
+	if len(q)+distanceThreshold < len(smin) {
+		return false
+	}
+
+	if len(q)-distanceThreshold > len(smax) {
+		return false
 	}
 
 	lcp := longestCommonPrefix(smin, smax)

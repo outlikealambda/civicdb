@@ -61,6 +61,15 @@ type Committee struct {
 	terminated  bool
 }
 
+func NewCommittee(regNo string, name string, chairperson *Person, treasurer *Person) *Committee {
+	return &Committee{
+		regNo:       regNo,
+		name:        name,
+		chairperson: chairperson,
+		treasurer:   treasurer,
+	}
+}
+
 func (c *Committee) Name() string {
 	return c.name
 }

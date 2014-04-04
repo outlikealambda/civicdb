@@ -4,7 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/megesdal/melodispurences/address"
-	"github.com/megesdal/melodispurences/bed"
+	//"github.com/megesdal/melodispurences/bed"
 	"github.com/megesdal/melodispurences/data"
 	"io"
 	"log"
@@ -24,8 +24,12 @@ type Person struct {
 func main() {
 	fmt.Printf("hello, world\n")
 
-	runRangeQuery()
+	peopleIdx := data.NewPersonIndex()
+	//TODO: candidatesByRegNo := make(map[string]*Person)
+	populateCandidacies(peopleIdx /*, candidatesByRegNo*/)
+	//populateCandidateCommitees(peopleIdx)
 	//groupByAddress()
+	runRangeQuery(peopleIdx)
 	//findContributorTypes()
 
 	return
@@ -120,7 +124,9 @@ func findContributorTypes() {
 	fmt.Println(contributorTypes)
 }
 
-func runRangeQuery() {
+func runRangeQuery(personIdx *data.PersonIndex) {
+
+	fmt.Println("Populating contributions...")
 
 	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
 	if err != nil {
@@ -134,18 +140,10 @@ func runRangeQuery() {
 	countPersonTotal := 0
 	countPersonUnique := 0
 
-	var queryDurationSum time.Duration
-	var insertDurationSum time.Duration
-
-	branchFactor := 32
-	lastNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
-	firstNameTree := bed.New(branchFactor, bed.CompareDictionaryOrder)
-	lastId := 0
-	people := make(map[int]*data.Person)
 	contributions := make([]*data.Contribution, 0)
 	//organizations := make(map[int]*data.Organization)
 	//pacs := make(map[int]*data.Committee)
-
+	peopleIdx := data.NewPersonIndex()
 	graph := data.ConnectGraphDb()
 	graph.Clean()
 	for true {
@@ -160,9 +158,6 @@ func runRangeQuery() {
 
 		contribution := data.NewContribution()
 
-		foundId := -1
-		exactMatchLN := false
-		exactMatchFN := false
 		contributorType := fields[1]
 		isPerson := false
 		if contributorType == "Immediate Family" || contributorType == "Candidate" || contributorType == "Individual" {
@@ -174,103 +169,107 @@ func runRangeQuery() {
 		}
 
 		toCheck := fields[2]
-		firstLast := strings.SplitN(toCheck, ",", 2)
-
-		lastName := strings.Trim(firstLast[0], "\r\n\t ")
-		var firstName string
-		if len(firstLast) == 2 {
-			firstName = strings.Trim(firstLast[1], "\r\n\t ")
-		}
-
-		beforeLastQueryTS := time.Now()
-		lastNameResults := lastNameTree.RangeQuery(lastName, 0.2)
-		queryDurationSum += time.Now().Sub(beforeLastQueryTS)
-
-		if len(lastNameResults) > 0 {
-
-			var possibleIds map[int]bool
-			possibleLastNameResultIds := make(map[int]bool)
-			for _, lastNameResult := range lastNameResults {
-				for _, lastNameResultId := range lastNameResult.Values {
-					possibleLastNameResultIds[lastNameResultId.(int)] = lastNameResult.Key == lastName
-				}
-			}
-
-			if firstName != "" {
-
-				beforeFirstQueryTS := time.Now()
-				firstNameResults := firstNameTree.RangeQuery(firstName, 0.2)
-				queryDurationSum += time.Now().Sub(beforeFirstQueryTS)
-
-				if len(firstNameResults) > 0 {
-					possibleIds = make(map[int]bool)
-					for _, firstNameResult := range firstNameResults {
-						for _, firstNameResultId := range firstNameResult.Values {
-							// find intersection...
-							_, existsInLastName := possibleLastNameResultIds[firstNameResultId.(int)]
-							if existsInLastName {
-								possibleIds[firstNameResultId.(int)] = firstNameResult.Key == firstName
-							}
-						}
-					}
-				}
-			} else {
-				possibleIds = possibleLastNameResultIds
-			}
-
-			if len(possibleIds) > 0 {
-				// pick a better id...
-				for possibleId, exactMatch := range possibleIds {
-					foundId = possibleId
-					if firstName != "" {
-						exactMatchFN = exactMatch
-						exactMatchLN = possibleLastNameResultIds[possibleId]
-					} else {
-						exactMatchLN = exactMatch
-					}
-					break
-				}
-			}
-		}
-
-		if foundId < 0 {
-			foundId = lastId
-			newPerson := data.NewPerson(firstName, lastName)
-			contribution.SetContributor(newPerson, contributorType)
-			people[foundId] = newPerson
-			graph.PopulateGraphWithPersonContribution(newPerson, contribution)
-			lastId++
+		person, isNew := peopleIdx.GetOrCreatePerson(toCheck)
+		if isNew {
 			countPersonUnique++
+			contribution.SetContributor(person, contributorType)
+			graph.PopulateGraphWithPersonContribution(person, contribution)
 		} else {
-			contribution.SetContributor(people[foundId], contributorType)
+			contribution.SetContributor(person, contributorType)
 		}
 		contributions = append(contributions, contribution)
-
-		if firstName != "" && !exactMatchFN {
-			beforeInsertTS := time.Now()
-			firstNameTree.Put(firstName, foundId)
-			insertDurationSum += time.Now().Sub(beforeInsertTS)
-		}
-
-		if !exactMatchLN {
-			beforeInsertTS := time.Now()
-			lastNameTree.Put(lastName, foundId)
-			insertDurationSum += time.Now().Sub(beforeInsertTS)
-		}
-
 		countPersonTotal++
 
 		if countPersonTotal%1000 == 0 {
 			durationSoFarNano := time.Now().Sub(startTS)
-			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", lastNameTree.Size(), countPersonTotal, durationSoFarNano/time.Millisecond, insertDurationSum/time.Millisecond)
+			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", countPersonUnique, countPersonTotal, durationSoFarNano/time.Millisecond, peopleIdx.InsertTimeSpent()/time.Millisecond)
 		}
 	}
 
 	durationNano := time.Now().Sub(startTS)
-	fmt.Printf("%d unique out of %d processed\n", countPersonUnique, countPersonTotal)
-	fmt.Printf("%d branch factor: %d num nodes in firstName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, firstNameTree.NumTotalNodes(), firstNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
-	fmt.Printf("%d branch factor: %d num nodes in lastName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, lastNameTree.NumTotalNodes(), lastNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
+	fmt.Printf("%d unique out of %d processed TOTAL [%dms total, %dms inserting]\n", countPersonUnique, countPersonTotal, durationNano/time.Millisecond, peopleIdx.InsertTimeSpent()/time.Millisecond)
+	//fmt.Printf("%d branch factor: %d num nodes in firstName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, firstNameTree.NumTotalNodes(), firstNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
+	//fmt.Printf("%d branch factor: %d num nodes in lastName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, lastNameTree.NumTotalNodes(), lastNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
 
 	//fmt.Println(firstNameTree.String())
 	//fmt.Println(lastNameTree.String())
+}
+
+func populateCandidateCommitees(index *data.PersonIndex) {
+	file, err := os.Open("data/Organizational_Reports_For_Hawaii_State_and_County_Candidates.csv")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	csvReader := csv.NewReader(file)
+	csvReader.Read()
+
+	count := 0
+	for true {
+
+		fields, err := csvReader.Read()
+		if err != nil {
+			if err != io.EOF {
+				log.Fatal(err)
+			}
+			break
+		}
+
+		committeeRegNo := strings.Trim(fields[0], " ")
+		candidateName := strings.Trim(fields[1], " ")
+		committeeName := strings.Trim(fields[2], " ")
+		person, isNew := index.GetOrCreatePerson(candidateName)
+		if isNew {
+			fmt.Println("NEW", person.Name(), committeeRegNo, committeeName)
+		} else {
+			fmt.Println("OLD", person.Name(), committeeRegNo, committeeName)
+		}
+		count++
+	}
+	fmt.Printf("%d candidates added to people index out of %d candidate commitees\n", index.Size(), count)
+}
+
+func populateCandidacies(index *data.PersonIndex) {
+
+	fmt.Println("Populating candidacies...")
+
+	file, err := os.Open("data/Profiles_For_Hawaii_State_and_County_Candidates.csv")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	csvReader := csv.NewReader(file)
+	csvReader.Read()
+
+	count := 0
+	for true {
+
+		fields, err := csvReader.Read()
+		if err != nil {
+			if err != io.EOF {
+				log.Fatal(err)
+			}
+			break
+		}
+
+		count++
+		//if count < 1000 {
+		//	continue
+		//}
+		committeeRegNo := strings.Trim(fields[0], " ")
+		candidateName := strings.Trim(fields[1], " ")
+		office := strings.Trim(fields[2], " ")
+		period := strings.Trim(fields[3], " ")
+		person, isNew := index.GetOrCreatePerson(candidateName)
+		//if isNew {
+		//	fmt.Println(count, "NEW", person.Name(), committeeRegNo, office, period)
+		//} else {
+		//	fmt.Println(count, "OLD", person.Name(), committeeRegNo, office, period)
+		//}
+		if count > 10000 {
+			fmt.Println(count, isNew, person.Name(), committeeRegNo, office, period)
+		}
+	}
+
+	fmt.Printf("%d candidates added to people index out of %d registration entries\n\n", index.Size(), count)
 }
