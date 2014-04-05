@@ -69,9 +69,7 @@ func (c *Committee) Name() string {
 // per election period
 type Candidacy struct {
 	Candidate *Person // or should this be a link to a person?
-	office    string  // should have a master list
-	district  string  // should pull from a master enum list
-	county    string  // should pull from a master list
+	Office    *Office // should have a master list
 	inOffice  bool
 
 	// name (or individual) and office overlap with profiles
@@ -79,8 +77,8 @@ type Candidacy struct {
 	electionPeriodEnd   time.Time
 }
 
-func NewCandidacy(candidate *Person, office string) *Candidacy {
-	return &Candidacy{Candidate: candidate, office: office}
+func NewCandidacy(candidate *Person, office *Office) *Candidacy {
+	return &Candidacy{Candidate: candidate, Office: office}
 }
 
 type NonCandidateCommittee struct {
@@ -94,12 +92,14 @@ type NonCandidateCommittee struct {
 // per election period implied by candidacy
 type CandidateCommittee struct {
 	Candidate *Person
+	Race      *Office
 	Committee
 }
 
-func NewCandidateCommittee(regNo string, name string, candidate *Person, chairperson *Person, treasurer *Person) *CandidateCommittee {
+func NewCandidateCommittee(regNo string, name string, candidate *Person, chairperson *Person, treasurer *Person, office *Office) *CandidateCommittee {
 	return &CandidateCommittee{
 		candidate,
+		office,
 		Committee{
 			RegNo:       regNo,
 			name:        name,
@@ -141,4 +141,15 @@ type NonMonetaryContribution struct {
 	Contribution
 	category    string
 	description string
+}
+
+type Office struct {
+	Title    string
+	Region   string // HI or US
+	District string
+	County   string
+}
+
+func NewOffice(title string, region string, district string, county string) *Office {
+	return &Office{title, region, district, county}
 }

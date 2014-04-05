@@ -38,7 +38,7 @@ func (graph *Neo4jConnection) Clean() {
 	tx.Commit()
 }
 
-func (graph *Neo4jConnection) AddCandidateCommittee(committee *CandidateCommittee) {
+func (graph *Neo4jConnection) AddCandidateCommittee(committee *CandidateCommittee, office *Office) {
 
 	// findPerson
 	candidateNode := graph.findPerson(committee.Candidate)
@@ -63,6 +63,52 @@ func (graph *Neo4jConnection) AddCandidateCommittee(committee *CandidateCommitte
 	candidateNode.Relate("candidate for", committeeNode.Id(), neoism.Props{})
 	chairpersonNode.Relate("chairperson for", committeeNode.Id(), neoism.Props{})
 	treasurerNode.Relate("treasurer for", committeeNode.Id(), neoism.Props{})
+
+	officeNode := graph.findOffice(office)
+	if officeNode == nil {
+		officeNode = graph.createOffice(office)
+	}
+
+	committeeNode.Relate("ran for", officeNode.Id(), neoism.Props{})
+}
+
+func (graph *Neo4jConnection) findOffice(office *Office) *neoism.Node {
+	result := []struct {
+		N neoism.Node
+	}{}
+	query := neoism.CypherQuery{
+		// Use backticks for long statements - Cypher is whitespace indifferent
+		Statement: `
+			MATCH (n:Office)
+			WHERE n.title = {title} AND n.region = {region} AND n.district = {district} AND n.county = {county}
+			RETURN n
+		`,
+		Parameters: neoism.Props{"title": office.Title, "region": office.Region, "district": office.District, "county": office.County},
+		Result:     &result,
+	}
+	graph.db.Cypher(&query)
+	var officeNode *neoism.Node
+	if len(result) > 0 {
+		officeNode = &result[0].N
+		officeNode.Db = graph.db
+	}
+	return officeNode
+}
+
+func (graph *Neo4jConnection) createOffice(office *Office) *neoism.Node {
+	result := []struct {
+		N neoism.Node // Column "n" gets automagically unmarshalled into field N
+	}{}
+	query := neoism.CypherQuery{
+		Statement: "CREATE (n:Office {title: {title}, region: {region}, district: {district}, county: {county}}) RETURN n",
+		// Use parameters instead of constructing a query string
+		Parameters: neoism.Props{"title": office.Title, "region": office.Region, "district": office.District, "county": office.County},
+		Result:     &result,
+	}
+	graph.db.Cypher(&query)
+	node := result[0].N // Only one row of data returned
+	node.Db = graph.db  // Must manually set Db with objects returned from Cypher query
+	return &node
 }
 
 func (graph *Neo4jConnection) createCommittee(committee *Committee) *neoism.Node {

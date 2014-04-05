@@ -26,11 +26,11 @@ func main() {
 
 	peopleIdx := data.NewPersonIndex()
 	candidateCommittees := make(map[string]*data.CandidateCommittee)
-	//graph := data.ConnectGraphDb()
-	//graph.Clean()
+	graph := data.ConnectGraphDb()
+	graph.Clean()
 
-	populateCandidateCommitees(peopleIdx, candidateCommittees, nil)
-	populateCandidacies(candidateCommittees, nil)
+	populateCandidateCommitees(peopleIdx, candidateCommittees, graph)
+	populateCandidacies(candidateCommittees, graph)
 	//populateContributions(peopleIdx, candidateCommittees, graph)
 	//groupByAddress()
 	//findContributorTypes()
@@ -206,7 +206,7 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 	csvReader := csv.NewReader(file)
 	csvReader.Read()
 
-	//TODO: races := make(map[string]bool)
+	races := make(map[string]*data.Office)
 
 	count := 0
 	for true {
@@ -221,18 +221,18 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 
 		committeeName := strings.Trim(fields[2], " ")
 		committeeRegNo := strings.Trim(fields[0], " ")
-		office := strings.Trim(fields[23], " ")
+		officeName := strings.Trim(fields[23], " ")
 		district := strings.Trim(fields[24], " ")
 		county := strings.Trim(fields[25], " ")
 		valid := true
-		if office != "Mayor" && office != "Prosecuting Attorney" && office != "Governor" && office != "Lt. Governor" {
+		if officeName != "Mayor" && officeName != "Prosecuting Attorney" && officeName != "Governor" && officeName != "Lt. Governor" {
 			if district == "" {
-				log.Println(committeeName, committeeRegNo, office, district, county)
+				log.Println(committeeName, committeeRegNo, officeName, district, county)
 				valid = false
 			}
-		} else if office != "Governor" && office != "Lt. Governor" {
+		} else if officeName != "Governor" && officeName != "Lt. Governor" {
 			if county == "" {
-				log.Println(committeeName, committeeRegNo, office, district, county)
+				log.Println(committeeName, committeeRegNo, officeName, district, county)
 				valid = false
 			}
 		}
@@ -241,8 +241,12 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 			continue
 		}
 
-		//raceKey = office + ":" + district + ":" + county
-		//races[office + ":" + ]
+		raceKey := officeName + ":" + district + ":" + county
+		office, exists := races[raceKey]
+		if !exists {
+			office = data.NewOffice(officeName, "HI", district, county)
+			races[raceKey] = office
+		}
 
 		candidateName := strings.Trim(fields[1], " ")
 		candidate, _ := index.GetOrCreatePerson(candidateName)
@@ -253,11 +257,11 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 		treasurerName := strings.Trim(fields[16], " ")
 		treasurer, _ := index.GetOrCreatePerson(treasurerName)
 
-		committee := data.NewCandidateCommittee(committeeRegNo, committeeName, candidate, chairperson, treasurer)
+		committee := data.NewCandidateCommittee(committeeRegNo, committeeName, candidate, chairperson, treasurer, office)
 		candidateCommittees[committeeRegNo] = committee
 
 		if graph != nil {
-			graph.AddCandidateCommittee(committee)
+			graph.AddCandidateCommittee(committee, office)
 		}
 		//if isNew {
 		//	fmt.Println("NEW", candidate.Name(), committeeRegNo, committeeName)
@@ -306,20 +310,15 @@ func populateCandidacies(candidateCommittees map[string]*data.CandidateCommittee
 			log.Println(committeeRegNo, candidateName, office, period)
 			continue
 		}
-		candidacy := data.NewCandidacy(candidateCommittee.Candidate, office)
+		//candidacy := data.NewCandidacy(candidateCommittee.Candidate, candidateCommittee.Race)
 
 		// should I verify the name?
 		if candidateCommittee.Candidate.Name() != candidateName {
 			fmt.Println(candidateName, "ne", candidateCommittee.Candidate.Name())
 		}
-		//person, isNew := index.GetOrCreatePerson(candidateName)
-		//if isNew {
-		//	fmt.Println(count, "NEW", person.Name(), committeeRegNo, office, period)
-		//} else {
-		//	fmt.Println(count, "OLD", person.Name(), committeeRegNo, office, period)
-		//}
-		if count > 10000 {
-			fmt.Println(count, candidacy, committeeRegNo, period)
+
+		if office != candidateCommittee.Race.Title {
+			fmt.Println(office, "ne", candidateCommittee.Race.Title)
 		}
 	}
 
