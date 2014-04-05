@@ -29,7 +29,7 @@ func (c *Organization) Name() string {
 }
 
 type Person struct {
-	firstName     string
+	FirstName     string
 	LastName      string
 	address       *Address
 	businessPhone int // requires normalization
@@ -43,31 +43,23 @@ type Person struct {
 }
 
 func NewPerson(firstName string, lastName string) *Person {
-	return &Person{firstName: firstName, LastName: lastName}
+	return &Person{FirstName: firstName, LastName: lastName}
 }
 
 func (p *Person) Name() string {
-	return p.LastName + ", " + p.firstName
+	return p.LastName + ", " + p.FirstName
 }
 
 type Committee struct {
-	regNo       string
+	RegNo       string
 	name        string
 	address     *Address
-	phone       int // normalize and make an int?
-	chairperson *Person
-	treasurer   *Person
+	phone       int     // normalize and make an int?
+	Candidate   *Person // or should this be a link to a person?
+	Chairperson *Person
+	Treasurer   *Person
 	party       string // should pull from a master list
 	terminated  bool
-}
-
-func NewCommittee(regNo string, name string, chairperson *Person, treasurer *Person) *Committee {
-	return &Committee{
-		regNo:       regNo,
-		name:        name,
-		chairperson: chairperson,
-		treasurer:   treasurer,
-	}
 }
 
 func (c *Committee) Name() string {
@@ -76,7 +68,7 @@ func (c *Committee) Name() string {
 
 // per election period
 type Candidacy struct {
-	candidate *Person // or should this be a link to a person?
+	Candidate *Person // or should this be a link to a person?
 	office    string  // should have a master list
 	district  string  // should pull from a master enum list
 	county    string  // should pull from a master list
@@ -85,6 +77,10 @@ type Candidacy struct {
 	// name (or individual) and office overlap with profiles
 	electionPeriodStart time.Time
 	electionPeriodEnd   time.Time
+}
+
+func NewCandidacy(candidate *Person, office string) *Candidacy {
+	return &Candidacy{Candidate: candidate, office: office}
 }
 
 type NonCandidateCommittee struct {
@@ -96,9 +92,21 @@ type NonCandidateCommittee struct {
 }
 
 // per election period implied by candidacy
-type CandidateCommitee struct {
-	Candidacy
+type CandidateCommittee struct {
+	Candidate *Person
 	Committee
+}
+
+func NewCandidateCommittee(regNo string, name string, candidate *Person, chairperson *Person, treasurer *Person) *CandidateCommittee {
+	return &CandidateCommittee{
+		candidate,
+		Committee{
+			RegNo:       regNo,
+			name:        name,
+			Chairperson: chairperson,
+			Treasurer:   treasurer,
+		},
+	}
 }
 
 type Contributor interface {

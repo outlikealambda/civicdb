@@ -38,6 +38,88 @@ func (graph *Neo4jConnection) Clean() {
 	tx.Commit()
 }
 
+func (graph *Neo4jConnection) AddCandidateCommittee(committee *CandidateCommittee) {
+
+	// findPerson
+	candidateNode := graph.findPerson(committee.Candidate)
+	if candidateNode == nil {
+		candidateNode = graph.createPerson(committee.Candidate)
+	}
+
+	chairpersonNode := graph.findPerson(committee.Chairperson)
+	if chairpersonNode == nil {
+		chairpersonNode = graph.createPerson(committee.Chairperson)
+	}
+
+	treasurerNode := graph.findPerson(committee.Treasurer)
+	if treasurerNode == nil {
+		treasurerNode = graph.createPerson(committee.Treasurer)
+	}
+
+	// create candidate committee
+	committeeNode := graph.createCommittee(&committee.Committee)
+
+	// N.B. Empty Props{} is okay
+	candidateNode.Relate("candidate for", committeeNode.Id(), neoism.Props{})
+	chairpersonNode.Relate("chairperson for", committeeNode.Id(), neoism.Props{})
+	treasurerNode.Relate("treasurer for", committeeNode.Id(), neoism.Props{})
+}
+
+func (graph *Neo4jConnection) createCommittee(committee *Committee) *neoism.Node {
+	result := []struct {
+		N neoism.Node // Column "n" gets automagically unmarshalled into field N
+	}{}
+	query := neoism.CypherQuery{
+		Statement: "CREATE (n:Committee {regNo: {regNo}, name: {name}}) RETURN n",
+		// Use parameters instead of constructing a query string
+		Parameters: neoism.Props{"regNo": committee.RegNo, "name": committee.Name()},
+		Result:     &result,
+	}
+	graph.db.Cypher(&query)
+	node := result[0].N // Only one row of data returned
+	node.Db = graph.db  // Must manually set Db with objects returned from Cypher query
+	return &node
+}
+
+func (graph *Neo4jConnection) createPerson(person *Person) *neoism.Node {
+	result := []struct {
+		N neoism.Node // Column "n" gets automagically unmarshalled into field N
+	}{}
+	query := neoism.CypherQuery{
+		Statement: "CREATE (n:Person {firstName: {firstName}, lastName: {lastName}}) RETURN n",
+		// Use parameters instead of constructing a query string
+		Parameters: neoism.Props{"firstName": person.FirstName, "lastName": person.LastName},
+		Result:     &result,
+	}
+	graph.db.Cypher(&query)
+	node := result[0].N // Only one row of data returned
+	node.Db = graph.db  // Must manually set Db with objects returned from Cypher query
+	return &node
+}
+
+func (graph *Neo4jConnection) findPerson(person *Person) *neoism.Node {
+	result := []struct {
+		N neoism.Node
+	}{}
+	query := neoism.CypherQuery{
+		// Use backticks for long statements - Cypher is whitespace indifferent
+		Statement: `
+			MATCH (n:Person)
+			WHERE n.firstName = {firstName} AND n.lastName ={lastName}
+			RETURN n
+		`,
+		Parameters: neoism.Props{"firstName": person.FirstName, "lastName": person.LastName},
+		Result:     &result,
+	}
+	graph.db.Cypher(&query)
+	var personNode *neoism.Node
+	if len(result) > 0 {
+		personNode = &result[0].N
+		personNode.Db = graph.db
+	}
+	return personNode
+}
+
 func (graph *Neo4jConnection) PopulateGraphWithPersonContribution(person *Person, contribution *Contribution) {
 
 	nodePerson, err := graph.db.CreateNode(neoism.Props{"lastName": person.LastName})
