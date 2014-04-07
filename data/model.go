@@ -115,25 +115,26 @@ type Contributor interface {
 
 // election period implied by committee contributed to? (candidate committees are per election period)
 type Contribution struct {
-	recipient       *Committee
-	contributor     Contributor // TODO: this could be a person, committee or organization
+	Recipient       *Committee
+	Contributor     Contributor // TODO: this could be a person, committee or organization
 	ContributorType string
 	date            time.Time
-	amount          int
+	Amount          int
 	aggregate       int // what is this?
 
 	mappingLocation string // what is this? street address of the commitee
 	outOfState      bool
 
+	Period string
 	//range should be implied by amount?
 }
 
-func NewContribution() *Contribution {
-	return &Contribution{}
+func NewContribution(recipient *Committee, amount int, period string) *Contribution {
+	return &Contribution{Recipient: recipient, Amount: amount, Period: period}
 }
 
 func (c *Contribution) SetContributor(contributor Contributor, contributorType string) {
-	c.contributor = contributor
+	c.Contributor = contributor
 	c.ContributorType = contributorType
 }
 

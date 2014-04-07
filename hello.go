@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,12 +27,21 @@ func main() {
 
 	peopleIdx := data.NewPersonIndex()
 	candidateCommittees := make(map[string]*data.CandidateCommittee)
+
+	log.Println("Connecting to db...")
 	graph := data.ConnectGraphDb()
+
+	log.Println("Cleaning old data...")
 	graph.Clean()
 
+	log.Println("Populating candidate committees...")
 	populateCandidateCommitees(peopleIdx, candidateCommittees, graph)
+
+	log.Println("Populating races...")
 	populateCandidacies(candidateCommittees, graph)
-	//populateContributions(peopleIdx, candidateCommittees, graph)
+
+	log.Println("Populating contributions...")
+	populateContributions(peopleIdx, candidateCommittees, graph)
 	//groupByAddress()
 	//findContributorTypes()
 
@@ -127,7 +137,7 @@ func findContributorTypes() {
 	fmt.Println(contributorTypes)
 }
 
-func populateContributions(personIdx *data.PersonIndex, graph *data.Neo4jConnection) {
+func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[string]*data.CandidateCommittee, graph *data.Neo4jConnection) {
 
 	fmt.Println("Populating contributions...")
 
@@ -143,10 +153,9 @@ func populateContributions(personIdx *data.PersonIndex, graph *data.Neo4jConnect
 	countPersonTotal := 0
 	countPersonUnique := 0
 
-	contributions := make([]*data.Contribution, 0)
+	//contributions := make([]*data.Contribution, 0)
 	//organizations := make(map[int]*data.Organization)
 	//pacs := make(map[int]*data.Committee)
-	peopleIdx := data.NewPersonIndex()
 	for true {
 
 		fields, err := csvReader.Read()
@@ -157,7 +166,10 @@ func populateContributions(personIdx *data.PersonIndex, graph *data.Neo4jConnect
 			break
 		}
 
-		contribution := data.NewContribution()
+		//officeName := fields[16]
+		//if officeName != "Governor" {
+		//	continue
+		//}
 
 		contributorType := fields[1]
 		isPerson := false
@@ -169,26 +181,34 @@ func populateContributions(personIdx *data.PersonIndex, graph *data.Neo4jConnect
 			continue
 		}
 
+		amount, err := strconv.Atoi(fields[4])
+		if err != nil {
+			amount = 0
+		}
+		regNo := fields[20]
+		committee := candidateCommittees[regNo]
+		period := fields[21]
+		contribution := data.NewContribution(&committee.Committee, amount, period)
+
 		toCheck := fields[2]
-		person, isNew := peopleIdx.GetOrCreatePerson(toCheck)
+		person, isNew := personIdx.GetOrCreatePerson(toCheck)
 		if isNew {
 			countPersonUnique++
-			contribution.SetContributor(person, contributorType)
-			graph.PopulateGraphWithPersonContribution(person, contribution)
-		} else {
-			contribution.SetContributor(person, contributorType)
 		}
-		contributions = append(contributions, contribution)
+
+		contribution.SetContributor(person, contributorType)
+		graph.PopulateGraphWithPersonContribution(contribution)
+		//contributions = append(contributions, contribution)
 		countPersonTotal++
 
 		if countPersonTotal%1000 == 0 {
 			durationSoFarNano := time.Now().Sub(startTS)
-			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", countPersonUnique, countPersonTotal, durationSoFarNano/time.Millisecond, peopleIdx.InsertTimeSpent()/time.Millisecond)
+			fmt.Printf("%d unique out of %d processed so far [%dms total, %dms inserting]\n", countPersonUnique, countPersonTotal, durationSoFarNano/time.Millisecond, personIdx.InsertTimeSpent()/time.Millisecond)
 		}
 	}
 
 	durationNano := time.Now().Sub(startTS)
-	fmt.Printf("%d unique out of %d processed TOTAL [%dms total, %dms inserting]\n", countPersonUnique, countPersonTotal, durationNano/time.Millisecond, peopleIdx.InsertTimeSpent()/time.Millisecond)
+	fmt.Printf("%d unique out of %d processed TOTAL [%dms total, %dms inserting]\n", countPersonUnique, countPersonTotal, durationNano/time.Millisecond, personIdx.InsertTimeSpent()/time.Millisecond)
 	//fmt.Printf("%d branch factor: %d num nodes in firstName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, firstNameTree.NumTotalNodes(), firstNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
 	//fmt.Printf("%d branch factor: %d num nodes in lastName b-tree index, of which %d are leaf nodes [%dms total, %dms inserting]\n", branchFactor, lastNameTree.NumTotalNodes(), lastNameTree.NumLeafNodes(), durationNano/time.Millisecond, insertDurationSum/time.Millisecond)
 
@@ -237,15 +257,14 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 			}
 		}
 
-		if !valid {
-			continue
-		}
-
-		raceKey := officeName + ":" + district + ":" + county
-		office, exists := races[raceKey]
-		if !exists {
-			office = data.NewOffice(officeName, "HI", district, county)
-			races[raceKey] = office
+		var office *data.Office
+		if valid {
+			raceKey := officeName + ":" + district + ":" + county
+			office, exists := races[raceKey]
+			if !exists {
+				office = data.NewOffice(officeName, "HI", district, county)
+				races[raceKey] = office
+			}
 		}
 
 		candidateName := strings.Trim(fields[1], " ")
@@ -261,7 +280,7 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 		candidateCommittees[committeeRegNo] = committee
 
 		if graph != nil {
-			graph.AddCandidateCommittee(committee, office)
+			graph.AddCandidateCommittee(committee)
 		}
 		//if isNew {
 		//	fmt.Println("NEW", candidate.Name(), committeeRegNo, committeeName)
@@ -304,21 +323,32 @@ func populateCandidacies(candidateCommittees map[string]*data.CandidateCommittee
 		candidateName := strings.Trim(fields[1], " ")
 
 		candidateCommittee := candidateCommittees[committeeRegNo]
-		office := strings.Trim(fields[2], " ")
+		officeName := strings.Trim(fields[2], " ")
 		period := strings.Trim(fields[3], " ")
 		if candidateCommittee == nil {
-			log.Println(committeeRegNo, candidateName, office, period)
+			log.Println(committeeRegNo, candidateName, officeName, period)
 			continue
 		}
 		//candidacy := data.NewCandidacy(candidateCommittee.Candidate, candidateCommittee.Race)
 
 		// should I verify the name?
 		if candidateCommittee.Candidate.Name() != candidateName {
-			fmt.Println(candidateName, "ne", candidateCommittee.Candidate.Name())
+			fmt.Println(candidateName, "ne committee filing", candidateCommittee.Candidate.Name())
 		}
 
-		if office != candidateCommittee.Race.Title {
-			fmt.Println(office, "ne", candidateCommittee.Race.Title)
+		var office *data.Office
+		if candidateCommittee.Race != nil {
+			if officeName != candidateCommittee.Race.Title {
+				//fmt.Println(candidateName, "office diff than committee filing", officeName, "ne", candidateCommittee.Race.Title)
+				office = data.NewOffice(officeName, "", "", "")
+			}
+		} else if officeName != "" {
+			//fmt.Println(candidateName, "office nil in committee filing", officeName)
+			office = data.NewOffice(officeName, "", "", "")
+		}
+
+		if graph != nil {
+			graph.AddCandidacy(candidateCommittee, office, period)
 		}
 	}
 
