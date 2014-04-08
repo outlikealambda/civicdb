@@ -3,24 +3,17 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/megesdal/melodispurences/address"
+	// "github.com/megesdal/melodispurences/address"
 	//"github.com/megesdal/melodispurences/bed"
 	"github.com/megesdal/melodispurences/data"
 	"io"
 	"log"
-	"math"
+	// "math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
-
-type Person struct {
-	location   address.Coordinates
-	names      []string
-	toBoxJelly float64
-	address    string
-}
 
 func main() {
 	fmt.Printf("hello, world\n")
@@ -42,72 +35,11 @@ func main() {
 
 	log.Println("Populating contributions...")
 	populateContributions(peopleIdx, candidateCommittees, graph)
-	//groupByAddress()
-	//findContributorTypes()
+	//TODO: candidatesByRegNo := make(map[string]*Person)
+	// populateCandidacies(peopleIdx /*, candidatesByRegNo*/)
+	//populateCandidateCommitees(peopleIdx)
 
 	return
-}
-
-func groupByAddress() {
-	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	csvReader := csv.NewReader(file)
-
-	people := []Person{}
-	boxJellyCoordinates := address.New(21.296834, -157.85665)
-
-	count := 0
-
-	for true {
-		count++
-		donation, err := csvReader.Read()
-		if err != nil {
-			if err != io.EOF {
-				log.Fatal(err)
-			}
-			break
-		}
-
-		personName := donation[2]
-		parsedAddress := strings.Split(donation[22], "\n")
-		// fmt.Printf("%v\n", addressSplit)
-		if len(parsedAddress) < 3 {
-			continue
-		}
-
-		var location address.Coordinates
-		location, err = address.ExtractCoordinates(parsedAddress[2])
-
-		if err != nil {
-			log.Printf("%v\n", err)
-			continue
-		}
-
-		toBoxJelly := address.CalculateDistance(location, boxJellyCoordinates)
-
-		mergedPerson := false
-
-		// fmt.Printf("Processed %v records, with %v uniques\n", count, len(people))
-		for j := 0; j < len(people); j++ {
-			if math.Abs(toBoxJelly-people[j].toBoxJelly) < 2 && address.CalculateDistance(location, people[j].location) < 2 {
-				people[j].names = append(people[j].names, personName)
-				mergedPerson = true
-				fmt.Printf("Merging %s into %s @ %v vs %v\n", personName, people[j].names[0], donation[8], people[j].address)
-				break
-			}
-		}
-
-		if !mergedPerson {
-			// fmt.Printf("Attaching new candidate: %s\n", personName)
-			people = append(people, Person{location, []string{personName}, toBoxJelly, donation[8]})
-		}
-	}
-	for i := 0; i < len(people); i++ {
-		fmt.Printf("%v\n", strings.Join(people[i].names, " | "))
-	}
 }
 
 func findContributorTypes() {
@@ -142,6 +74,7 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 	fmt.Println("Populating contributions...")
 
 	file, err := os.Open("data/Campaign_Contributions_Received_By_Hawaii_State_and_County_Candidates_From_November_8__2006_Through_December_31__2013.csv")
+	// file, err := os.Open("data/kudo.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -191,7 +124,12 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 		contribution := data.NewContribution(&committee.Committee, amount, period)
 
 		toCheck := fields[2]
-		person, isNew := personIdx.GetOrCreatePerson(toCheck)
+		parsedAddress := strings.Split(fields[22], "\n")
+		if len(parsedAddress) < 3 {
+			continue
+		}
+		// person, isNew := peopleIdx.GetOrCreatePerson(toCheck)
+		person, isNew := personIdx.ExtractAndGetOrCreatePerson(toCheck, parsedAddress[2])
 		if isNew {
 			countPersonUnique++
 		}
@@ -268,13 +206,16 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 		}
 
 		candidateName := strings.Trim(fields[1], " ")
-		candidate, _ := index.GetOrCreatePerson(candidateName)
+		// candidate, _ := index.GetOrCreatePerson(candidateName)
+		candidate, _ := index.ExtractAndGetOrCreatePerson(candidateName, "")
 
 		chairpersonName := strings.Trim(fields[9], " ")
-		chairperson, _ := index.GetOrCreatePerson(chairpersonName)
+		// chairperson, _ := index.GetOrCreatePerson(chairpersonName)
+		chairperson, _ := index.ExtractAndGetOrCreatePerson(chairpersonName, "")
 
 		treasurerName := strings.Trim(fields[16], " ")
-		treasurer, _ := index.GetOrCreatePerson(treasurerName)
+		treasurer, _ := index.ExtractAndGetOrCreatePerson(treasurerName, "")
+		// treasurer, _ := index.GetOrCreatePerson(treasurerName)
 
 		committee := data.NewCandidateCommittee(committeeRegNo, committeeName, candidate, chairperson, treasurer, office)
 		candidateCommittees[committeeRegNo] = committee

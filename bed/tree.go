@@ -2,7 +2,7 @@ package bed
 
 import (
 	//"github.com/megesdal/melodispurences/damerau"
-	//"fmt"
+	// "fmt"
 	"math"
 )
 
@@ -52,7 +52,15 @@ func (tree *BPlusTree) Insert(key string) {
 
 func (tree *BPlusTree) Put(key string, value interface{}) {
 	nodeToInsert := tree.recFindNode(key, tree.root)
+	// if value == 807 {
+	// 	fmt.Printf("Found Node: %v\n", nodeToInsert)
+	// }
 	tree.recInsert(key, nodeToInsert, value, nil)
+	// if value == 807 {
+	// 	nodeAfterInsert := tree.recFindNode(key, tree.root)
+	// 	fmt.Printf("Old Node: %v\n", nodeToInsert)
+	// 	fmt.Printf("New Node: %v\n", nodeAfterInsert)
+	// }
 }
 
 func (tree *BPlusTree) createTreeNode() *bPlusTreeNode {
@@ -260,7 +268,9 @@ func (tree *BPlusTree) recInsert(q string, parent *bPlusTreeNode, v interface{},
 func addValueToNode(nodeToInsert *bPlusTreeNode, v interface{}, insertIdx int, merge bool) {
 	if merge {
 		//fmt.Printf("%d %v %v\n", insertIdx, v, nodeToInsert.data)
-		nodeToInsert.data[insertIdx] = append(nodeToInsert.data[insertIdx], v)
+		if !checkIfAlreadyThere(nodeToInsert.data[insertIdx], v) {
+			nodeToInsert.data[insertIdx] = append(nodeToInsert.data[insertIdx], v)
+		}
 	} else {
 		data := make([]interface{}, 1)
 		data[0] = v
@@ -278,6 +288,19 @@ func addValueToNode(nodeToInsert *bPlusTreeNode, v interface{}, insertIdx int, m
 			//fmt.Printf("Inserting DATA %v at end (%d): %v\n", v, insertIdx, nodeToInsert.data)
 		}
 	}
+}
+
+func checkIfAlreadyThere(existingValues []interface{}, value interface{}) bool {
+	for _, existingValue := range existingValues {
+		switch existingValue.(type) {
+		case int:
+			if existingValue == value {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func addKeyToNode(nodeToInsert *bPlusTreeNode, q string, insertIdx int) {

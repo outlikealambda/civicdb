@@ -11,6 +11,13 @@ type Address struct {
 
 	lat float64
 	lon float64
+
+	distanceToFixedReference float64 // no need to persist
+	bearingToFixedReference  float64
+}
+
+func NewAddress(lat, lon, distance, bearing float64) *Address {
+	return &Address{lat: lat, lon: lon, distanceToFixedReference: distance, bearingToFixedReference: bearing}
 }
 
 // this covers org reports and contributions in and out of candidate and non-candidate committees
@@ -31,7 +38,7 @@ func (c *Organization) Name() string {
 type Person struct {
 	FirstName     string
 	LastName      string
-	address       *Address
+	addresses     []*Address
 	businessPhone int // requires normalization
 
 	// only PAC have this data
