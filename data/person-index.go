@@ -122,6 +122,7 @@ func (index *PersonIndex) GetOrCreatePerson(name string) (*Person, bool) {
 	if foundId < 0 {
 		foundId = index.lastId
 		person = NewPerson(firstName, lastName)
+		person.Id = foundId
 		index.people[foundId] = person
 		index.lastId++
 		index.count++

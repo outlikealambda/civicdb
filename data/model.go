@@ -29,6 +29,7 @@ func (c *Organization) Name() string {
 }
 
 type Person struct {
+	Id            int
 	FirstName     string
 	LastName      string
 	address       *Address
@@ -51,6 +52,7 @@ func (p *Person) Name() string {
 }
 
 type Committee struct {
+	Id          int
 	RegNo       string
 	name        string
 	address     *Address
@@ -93,6 +95,7 @@ type NonCandidateCommittee struct {
 type CandidateCommittee struct {
 	Candidate *Person
 	Race      *Office
+	//otherOffices map[string]string
 	Committee
 }
 
@@ -100,6 +103,7 @@ func NewCandidateCommittee(regNo string, name string, candidate *Person, chairpe
 	return &CandidateCommittee{
 		candidate,
 		office,
+		//make(map[string]string),
 		Committee{
 			RegNo:       regNo,
 			name:        name,
@@ -108,6 +112,14 @@ func NewCandidateCommittee(regNo string, name string, candidate *Person, chairpe
 		},
 	}
 }
+
+//func (c *CandidateCommittee) AddOtherOffice(term string, otherOffice string) {
+//	c.otherOffices[term] = otherOffice
+//}
+
+//func (c *CandidateCommittee) GetOtherOfficeForTerm(term string) string {
+//	return c.otherOffices[term]
+//}
 
 type Contributor interface {
 	Name() string
