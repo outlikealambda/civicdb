@@ -372,6 +372,8 @@ func populateCandidacies(candidateCommittees map[string]*data.CandidateCommittee
 			if officeName != candidateCommittee.Race.Title {
 				fmt.Println(candidateName, "office diff than committee filing", officeName, "ne", candidateCommittee.Race.Title)
 				//candidateCommittee.AddOtherOffice(period, officeName)
+			} else {
+				office = candidateCommittee.Race
 			}
 		} else if officeName != "" {
 			//fmt.Println(candidateName, "office diff than committee filing", officeName, "not nil")
