@@ -20,24 +20,25 @@ func main() {
 
 	peopleIdx := data.NewPersonIndex()
 	candidateCommittees := make(map[string]*data.CandidateCommittee)
+	races := make(map[string]*data.Office)
 
 	log.Println("Connecting to db...")
 	graph := data.ConnectGraphDb()
+	//graph = nil
 
 	log.Println("Cleaning old data...")
 	graph.Clean()
 
 	log.Println("Populating candidate committees...")
-	populateCandidateCommitees(peopleIdx, candidateCommittees, graph)
+	populateCandidateCommitees(peopleIdx, candidateCommittees, races, graph)
 
 	log.Println("Populating races...")
 	populateCandidacies(candidateCommittees, graph)
 
 	log.Println("Populating contributions...")
-	populateContributions(peopleIdx, candidateCommittees, graph)
-	//TODO: candidatesByRegNo := make(map[string]*Person)
-	// populateCandidacies(peopleIdx /*, candidatesByRegNo*/)
-	//populateCandidateCommitees(peopleIdx)
+	populateContributions(peopleIdx, candidateCommittees, races, graph)
+	//groupByAddress()
+	//findContributorTypes()
 
 	return
 }
@@ -69,7 +70,7 @@ func findContributorTypes() {
 	fmt.Println(contributorTypes)
 }
 
-func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[string]*data.CandidateCommittee, graph *data.Neo4jConnection) {
+func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[string]*data.CandidateCommittee, races map[string]*data.Office, graph *data.Neo4jConnection) {
 
 	fmt.Println("Populating contributions...")
 
@@ -99,7 +100,6 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 			break
 		}
 
-		//officeName := fields[16]
 		//if officeName != "Governor" {
 		//	continue
 		//}
@@ -120,7 +120,33 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 		}
 		regNo := fields[20]
 		committee := candidateCommittees[regNo]
-		period := fields[21]
+
+		//var office *data.Office
+		officeName := strings.Trim(fields[16], " ")
+		district := strings.Trim(fields[17], " ")
+		county := strings.Trim(fields[18], " ")
+		period := strings.Trim(fields[21], " ")
+
+		if IsOfficeInfoValid(officeName, district, county) {
+			raceKey := officeName + ":" + district + ":" + county
+			office, exists := races[raceKey]
+			if !exists {
+				office = data.NewOffice(officeName, "HI", district, county)
+				races[raceKey] = office
+			}
+
+			if committee.Race == nil || committee.Race.Title != office.Title || committee.Race.District != office.District || committee.Race.County != office.County {
+				log.Println("CONTRIBUTION TO DIFFERENT OFFICE AS CAND COMMITTEE ON FILE")
+				log.Printf("%v\n", committee.Race)
+				log.Println("    ", officeName, district, county)
+				//if committee.GetOtherOfficeForTerm(period) == office.Title {
+				//	log.Println("FOUND MISSING INFO:", committee.Candidate.Name(), period, office.Title, office.District, office.County)
+				//}
+			}
+		} else {
+			log.Println("INVALID office for CONTRIBUTION", committee.Name(), regNo, officeName, district, county)
+		}
+
 		contribution := data.NewContribution(&committee.Committee, amount, period)
 
 		toCheck := fields[2]
@@ -135,7 +161,9 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 		}
 
 		contribution.SetContributor(person, contributorType)
-		graph.PopulateGraphWithPersonContribution(contribution)
+		if graph != nil {
+			graph.PopulateGraphWithPersonContribution(contribution)
+		}
 		//contributions = append(contributions, contribution)
 		countPersonTotal++
 
@@ -154,7 +182,7 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 	//fmt.Println(lastNameTree.String())
 }
 
-func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map[string]*data.CandidateCommittee, graph *data.Neo4jConnection) {
+func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map[string]*data.CandidateCommittee, races map[string]*data.Office, graph *data.Neo4jConnection) {
 
 	file, err := os.Open("data/Organizational_Reports_For_Hawaii_State_and_County_Candidates.csv")
 	if err != nil {
@@ -163,8 +191,6 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 
 	csvReader := csv.NewReader(file)
 	csvReader.Read()
-
-	races := make(map[string]*data.Office)
 
 	count := 0
 	for true {
@@ -182,27 +208,18 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 		officeName := strings.Trim(fields[23], " ")
 		district := strings.Trim(fields[24], " ")
 		county := strings.Trim(fields[25], " ")
-		valid := true
-		if officeName != "Mayor" && officeName != "Prosecuting Attorney" && officeName != "Governor" && officeName != "Lt. Governor" {
-			if district == "" {
-				log.Println(committeeName, committeeRegNo, officeName, district, county)
-				valid = false
-			}
-		} else if officeName != "Governor" && officeName != "Lt. Governor" {
-			if county == "" {
-				log.Println(committeeName, committeeRegNo, officeName, district, county)
-				valid = false
-			}
-		}
 
 		var office *data.Office
-		if valid {
+		if IsOfficeInfoValid(officeName, district, county) {
 			raceKey := officeName + ":" + district + ":" + county
-			office, exists := races[raceKey]
+			var exists bool
+			office, exists = races[raceKey]
 			if !exists {
 				office = data.NewOffice(officeName, "HI", district, county)
 				races[raceKey] = office
 			}
+		} else {
+			log.Println("INVALID office description", committeeName, committeeRegNo, officeName, district, county)
 		}
 
 		candidateName := strings.Trim(fields[1], " ")
@@ -231,6 +248,19 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 		count++
 	}
 	fmt.Printf("%d candidates added to people index out of %d candidate commitees\n", index.Size(), count)
+}
+
+func IsOfficeInfoValid(title string, district string, county string) bool {
+	if title != "Mayor" && title != "Prosecuting Attorney" && title != "Governor" && title != "Lt. Governor" {
+		if district == "" {
+			return false
+		}
+	} else if title != "Governor" && title != "Lt. Governor" {
+		if county == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func populateCandidacies(candidateCommittees map[string]*data.CandidateCommittee, graph *data.Neo4jConnection) {
@@ -267,7 +297,7 @@ func populateCandidacies(candidateCommittees map[string]*data.CandidateCommittee
 		officeName := strings.Trim(fields[2], " ")
 		period := strings.Trim(fields[3], " ")
 		if candidateCommittee == nil {
-			log.Println(committeeRegNo, candidateName, officeName, period)
+			log.Println("Candidate committee not found!", committeeRegNo, candidateName, officeName, period)
 			continue
 		}
 		//candidacy := data.NewCandidacy(candidateCommittee.Candidate, candidateCommittee.Race)
@@ -280,12 +310,14 @@ func populateCandidacies(candidateCommittees map[string]*data.CandidateCommittee
 		var office *data.Office
 		if candidateCommittee.Race != nil {
 			if officeName != candidateCommittee.Race.Title {
-				//fmt.Println(candidateName, "office diff than committee filing", officeName, "ne", candidateCommittee.Race.Title)
-				office = data.NewOffice(officeName, "", "", "")
+				fmt.Println(candidateName, "office diff than committee filing", officeName, "ne", candidateCommittee.Race.Title)
+				//candidateCommittee.AddOtherOffice(period, officeName)
+			} else {
+				office = candidateCommittee.Race
 			}
 		} else if officeName != "" {
-			//fmt.Println(candidateName, "office nil in committee filing", officeName)
-			office = data.NewOffice(officeName, "", "", "")
+			//fmt.Println(candidateName, "office diff than committee filing", officeName, "not nil")
+			//candidateCommittee.AddOtherOffice(period, officeName)
 		}
 
 		if graph != nil {
