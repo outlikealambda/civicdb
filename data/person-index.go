@@ -257,6 +257,7 @@ func (index *PersonIndex) GetOrCreatePerson(firstName, lastName string, lat, lon
 			person.addresses = append(person.addresses, NewAddress(lat, lon, distance, bearing))
 		}
 
+		person.Id = index.lastId
 		personKey = index.lastId
 		index.people[personKey] = person
 

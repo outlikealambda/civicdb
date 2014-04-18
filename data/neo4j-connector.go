@@ -117,10 +117,10 @@ func (graph *Neo4jConnection) findOffice(office *Office) *neoism.Node {
 		// Use backticks for long statements - Cypher is whitespace indifferent
 		Statement: `
 				MATCH (n:Office)
-				WHERE n.title = {title} AND n.region = {region} AND n.district = {district} AND n.county = {county}
+				WHERE n.officeId = {officeId}
 				RETURN n
 			`,
-		Parameters: neoism.Props{"title": office.Title, "region": office.Region, "district": office.District, "county": office.County},
+		Parameters: neoism.Props{"officeId": office.Id},
 		Result:     &result,
 	}
 	//}
@@ -138,9 +138,9 @@ func (graph *Neo4jConnection) createOffice(office *Office) *neoism.Node {
 		N neoism.Node // Column "n" gets automagically unmarshalled into field N
 	}{}
 	query := neoism.CypherQuery{
-		Statement: "CREATE (n:Office {title: {title}, region: {region}, district: {district}, county: {county}}) RETURN n",
+		Statement: "CREATE (n:Office {officeId: {officeId}, title: {title}, region: {region}, district: {district}, county: {county}}) RETURN n",
 		// Use parameters instead of constructing a query string
-		Parameters: neoism.Props{"title": office.Title, "region": office.Region, "district": office.District, "county": office.County},
+		Parameters: neoism.Props{"officeId": office.Id, "title": office.Title, "region": office.Region, "district": office.District, "county": office.County},
 		Result:     &result,
 	}
 	graph.db.Cypher(&query)
@@ -178,9 +178,9 @@ func (graph *Neo4jConnection) createCommittee(committee *Committee) *neoism.Node
 		N neoism.Node // Column "n" gets automagically unmarshalled into field N
 	}{}
 	query := neoism.CypherQuery{
-		Statement: "CREATE (n:Committee {regNo: {regNo}, name: {name}}) RETURN n",
+		Statement: "CREATE (n:Committee {regNo: {regNo}, name: {name}, party: {party}, terminated: {terminated}, inOffice: {inOffice}}) RETURN n",
 		// Use parameters instead of constructing a query string
-		Parameters: neoism.Props{"regNo": committee.RegNo, "name": committee.Name()},
+		Parameters: neoism.Props{"regNo": committee.RegNo, "name": committee.Name(), "party": committee.Party, "terminated": committee.Terminated, "inOffice": committee.InOffice},
 		Result:     &result,
 	}
 	graph.db.Cypher(&query)
@@ -200,7 +200,7 @@ func (graph *Neo4jConnection) createPerson(person *Person) *neoism.Node {
 		N neoism.Node // Column "n" gets automagically unmarshalled into field N
 	}{}
 	query := neoism.CypherQuery{
-		Statement: "CREATE (n:Person {firstName: {firstName}, lastName: {lastName}}) RETURN n",
+		Statement: "CREATE (n:Person {personId: {personId}, firstName: {firstName}, lastName: {lastName}}) RETURN n",
 		// Use parameters instead of constructing a query string
 		Parameters: neoism.Props{"personId": person.Id, "firstName": person.FirstName, "lastName": person.LastName},
 		Result:     &result,
@@ -232,10 +232,10 @@ func (graph *Neo4jConnection) findPerson(person *Person) *neoism.Node {
 		// Use backticks for long statements - Cypher is whitespace indifferent
 		Statement: `
 			MATCH (n:Person)
-			WHERE n.firstName = {firstName} AND n.lastName ={lastName}
+			WHERE n.personId = {personId}
 			RETURN n
 		`,
-		Parameters: neoism.Props{"firstName": person.FirstName, "lastName": person.LastName},
+		Parameters: neoism.Props{"personId": person.Id, "lastName": person.LastName},
 		Result:     &result,
 	}
 	graph.db.Cypher(&query)
@@ -256,7 +256,7 @@ func (graph *Neo4jConnection) PopulateGraphWithPersonContribution(contribution *
 				contributorNode = graph.createPerson(person)
 			}
 
-			contributorNode.Relate("contributed to", recipientNode.Id(), neoism.Props{"amount": contribution.Amount, "in": contribution.Period})
+			contributorNode.Relate("contributed to", recipientNode.Id(), neoism.Props{"aggregate": contribution.Aggregate, "contributionId": contribution.Id, "amount": contribution.Amount, "in": contribution.Period, "type": contribution.ContributorType})
 		}
 	}
 

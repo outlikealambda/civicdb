@@ -70,6 +70,22 @@ func findContributorTypes() {
 	fmt.Println(contributorTypes)
 }
 
+func parseDollars(dollarString string) int {
+	if strings.HasPrefix(dollarString, "$") {
+		dollarString = dollarString[1:]
+	}
+
+	dollarString = strings.Replace(dollarString, ".", "", -1)
+	cents, err := strconv.Atoi(dollarString)
+	if err != nil {
+		log.Println("Could not parse: ", dollarString)
+		cents = 0
+	}
+
+	// forget the cents?
+	return cents / 100
+}
+
 func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[string]*data.CandidateCommittee, races map[string]*data.Office, graph *data.Neo4jConnection) {
 
 	fmt.Println("Populating contributions...")
@@ -114,10 +130,9 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 			continue
 		}
 
-		amount, err := strconv.Atoi(fields[4])
-		if err != nil {
-			amount = 0
-		}
+		// TODO: convert to number
+		amount := parseDollars(strings.Trim(fields[4], " "))
+		aggregate := parseDollars(strings.Trim(fields[5], " "))
 		regNo := fields[20]
 		committee := candidateCommittees[regNo]
 
@@ -131,7 +146,7 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 			raceKey := officeName + ":" + district + ":" + county
 			office, exists := races[raceKey]
 			if !exists {
-				office = data.NewOffice(officeName, "HI", district, county)
+				office = data.NewOffice(len(races), officeName, "HI", district, county)
 				races[raceKey] = office
 			}
 
@@ -147,7 +162,7 @@ func populateContributions(personIdx *data.PersonIndex, candidateCommittees map[
 			log.Println("INVALID office for CONTRIBUTION", committee.Name(), regNo, officeName, district, county)
 		}
 
-		contribution := data.NewContribution(&committee.Committee, amount, period)
+		contribution := data.NewContribution(countPersonTotal, &committee.Committee, amount, aggregate, period)
 
 		toCheck := fields[2]
 		parsedAddress := strings.Split(fields[22], "\n")
@@ -215,7 +230,7 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 			var exists bool
 			office, exists = races[raceKey]
 			if !exists {
-				office = data.NewOffice(officeName, "HI", district, county)
+				office = data.NewOffice(len(races), officeName, "HI", district, county)
 				races[raceKey] = office
 			}
 		} else {
@@ -234,7 +249,11 @@ func populateCandidateCommitees(index *data.PersonIndex, candidateCommittees map
 		treasurer, _ := index.ExtractAndGetOrCreatePerson(treasurerName, "")
 		// treasurer, _ := index.GetOrCreatePerson(treasurerName)
 
-		committee := data.NewCandidateCommittee(committeeRegNo, committeeName, candidate, chairperson, treasurer, office)
+		party := strings.Trim(fields[26], " ")
+		terminated := strings.Trim(fields[27], " ") == "Y"
+		inOffice := strings.Trim(fields[28], " ") == "1"
+
+		committee := data.NewCandidateCommittee(committeeRegNo, committeeName, candidate, chairperson, treasurer, office, party, terminated, inOffice)
 		candidateCommittees[committeeRegNo] = committee
 
 		if graph != nil {

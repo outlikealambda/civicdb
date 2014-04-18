@@ -67,8 +67,9 @@ type Committee struct {
 	Candidate   *Person // or should this be a link to a person?
 	Chairperson *Person
 	Treasurer   *Person
-	party       string // should pull from a master list
-	terminated  bool
+	Party       string // should pull from a master list
+	Terminated  bool
+	InOffice    bool
 }
 
 func (c *Committee) Name() string {
@@ -106,7 +107,7 @@ type CandidateCommittee struct {
 	Committee
 }
 
-func NewCandidateCommittee(regNo string, name string, candidate *Person, chairperson *Person, treasurer *Person, office *Office) *CandidateCommittee {
+func NewCandidateCommittee(regNo string, name string, candidate *Person, chairperson *Person, treasurer *Person, office *Office, party string, terminated bool, inOffice bool) *CandidateCommittee {
 	return &CandidateCommittee{
 		candidate,
 		office,
@@ -116,6 +117,9 @@ func NewCandidateCommittee(regNo string, name string, candidate *Person, chairpe
 			name:        name,
 			Chairperson: chairperson,
 			Treasurer:   treasurer,
+			Party:       party,
+			Terminated:  terminated,
+			InOffice:    inOffice,
 		},
 	}
 }
@@ -134,21 +138,22 @@ type Contributor interface {
 
 // election period implied by committee contributed to? (candidate committees are per election period)
 type Contribution struct {
+	Id              int
 	Recipient       *Committee
 	Contributor     Contributor // TODO: this could be a person, committee or organization
 	ContributorType string
-	date            time.Time
 	Amount          int
-	aggregate       int // what is this?
+	Aggregate       int
+	Period          string
 
-	mappingLocation string // what is this? street address of the commitee
-	outOfState      bool
-
-	Period string
+	// TODO
+	//date            time.Time
+	//mappingLocation string // what is this? street address of the commitee
+	//outOfState      bool
 	//range should be implied by amount?
 }
 
-func NewContribution(recipient *Committee, amount int, period string) *Contribution {
+func NewContribution(id int, recipient *Committee, amount int, aggregate int, period string) *Contribution {
 	return &Contribution{Recipient: recipient, Amount: amount, Period: period}
 }
 
@@ -164,12 +169,13 @@ type NonMonetaryContribution struct {
 }
 
 type Office struct {
+	Id       int
 	Title    string
 	Region   string // HI or US
 	District string
 	County   string
 }
 
-func NewOffice(title string, region string, district string, county string) *Office {
-	return &Office{title, region, district, county}
+func NewOffice(id int, title string, region string, district string, county string) *Office {
+	return &Office{id, title, region, district, county}
 }
