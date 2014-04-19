@@ -69,7 +69,6 @@ type Committee struct {
 	Treasurer   *Person
 	Party       string // should pull from a master list
 	Terminated  bool
-	InOffice    bool
 }
 
 func (c *Committee) Name() string {
@@ -80,7 +79,7 @@ func (c *Committee) Name() string {
 type Candidacy struct {
 	Candidate *Person // or should this be a link to a person?
 	Office    *Office // should have a master list
-	inOffice  bool
+	InOffice  bool
 
 	// name (or individual) and office overlap with profiles
 	electionPeriodStart time.Time
@@ -92,17 +91,41 @@ func NewCandidacy(candidate *Person, office *Office) *Candidacy {
 }
 
 type NonCandidateCommittee struct {
+	NCType          string // TODO: enum list of valid types
+	Area            string
+	Issue           string
+	SingleCandidate *Person
 	Committee
-	ncType                 string     // what is this? should probably have an enum list
-	area                   string     //area, scope, jurisdiction
-	ballotIssueDescription string     // what is this?
-	singleCandidate        *Candidacy // or should this link to the Person, since the candidacy is linked to an election period
+}
+
+func NewNonCandidateCommittee(regNo string, name string, chairperson *Person, treasurer *Person, nctype string, terminated bool) *NonCandidateCommittee {
+	return &NonCandidateCommittee{
+		NCType: nctype,
+		Committee: Committee{
+			RegNo:       regNo,
+			name:        name,
+			Chairperson: chairperson,
+			Treasurer:   treasurer,
+			Terminated:  terminated,
+		},
+	}
+}
+
+func (c *NonCandidateCommittee) SetSingleCandidate(person *Person) {
+	c.SingleCandidate = person
+}
+
+func (c *NonCandidateCommittee) SetFocus(area string, party string, issue string) {
+	c.Area = area
+	c.Committee.Party = party
+	c.Issue = issue
 }
 
 // per election period implied by candidacy
 type CandidateCommittee struct {
 	Candidate *Person
 	Race      *Office
+	InOffice  bool
 	//otherOffices map[string]string
 	Committee
 }
@@ -111,6 +134,7 @@ func NewCandidateCommittee(regNo string, name string, candidate *Person, chairpe
 	return &CandidateCommittee{
 		candidate,
 		office,
+		inOffice,
 		//make(map[string]string),
 		Committee{
 			RegNo:       regNo,
@@ -119,7 +143,6 @@ func NewCandidateCommittee(regNo string, name string, candidate *Person, chairpe
 			Treasurer:   treasurer,
 			Party:       party,
 			Terminated:  terminated,
-			InOffice:    inOffice,
 		},
 	}
 }

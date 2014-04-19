@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"github.com/jmcvetta/neoism"
 	"log"
 )
@@ -45,6 +46,25 @@ func (graph *Neo4jConnection) Init() {
 	graph.db.CreateIndex("Office", "officeId")
 }
 
+func (graph *Neo4jConnection) AddNonCandidateCommittee(committee *NonCandidateCommittee) {
+
+	chairpersonNode := graph.findOrCreatePerson(committee.Chairperson)
+	treasurerNode := graph.findOrCreatePerson(committee.Treasurer)
+
+	committeeNode := graph.createCommittee(&committee.Committee)
+	committeeNode.SetProperty("nctype", committee.NCType)
+	committeeNode.SetProperty("area", committee.Area)
+	committeeNode.SetProperty("issue", committee.Issue)
+
+	chairpersonNode.Relate("chairperson for", committeeNode.Id(), neoism.Props{})
+	treasurerNode.Relate("treasurer for", committeeNode.Id(), neoism.Props{})
+
+	if committee.SingleCandidate != nil {
+		candidateNode := graph.findOrCreatePerson(committee.SingleCandidate)
+		committeeNode.Relate("dedicated to", candidateNode.Id(), neoism.Props{})
+	}
+}
+
 func (graph *Neo4jConnection) AddCandidateCommittee(committee *CandidateCommittee) {
 
 	// findPerson
@@ -64,6 +84,7 @@ func (graph *Neo4jConnection) AddCandidateCommittee(committee *CandidateCommitte
 
 	// create candidate committee
 	committeeNode := graph.createCommittee(&committee.Committee)
+	committeeNode.SetProperty("inOffice", fmt.Sprintf("%v", committee.InOffice))
 
 	// N.B. Empty Props{} is okay
 	candidateNode.Relate("candidate for", committeeNode.Id(), neoism.Props{})
@@ -178,9 +199,9 @@ func (graph *Neo4jConnection) createCommittee(committee *Committee) *neoism.Node
 		N neoism.Node // Column "n" gets automagically unmarshalled into field N
 	}{}
 	query := neoism.CypherQuery{
-		Statement: "CREATE (n:Committee {regNo: {regNo}, name: {name}, party: {party}, terminated: {terminated}, inOffice: {inOffice}}) RETURN n",
+		Statement: "CREATE (n:Committee {regNo: {regNo}, name: {name}, party: {party}, terminated: {terminated}}) RETURN n",
 		// Use parameters instead of constructing a query string
-		Parameters: neoism.Props{"regNo": committee.RegNo, "name": committee.Name(), "party": committee.Party, "terminated": committee.Terminated, "inOffice": committee.InOffice},
+		Parameters: neoism.Props{"regNo": committee.RegNo, "name": committee.Name(), "party": committee.Party, "terminated": committee.Terminated},
 		Result:     &result,
 	}
 	graph.db.Cypher(&query)
@@ -247,16 +268,25 @@ func (graph *Neo4jConnection) findPerson(person *Person) *neoism.Node {
 	return personNode
 }
 
-func (graph *Neo4jConnection) PopulateGraphWithPersonContribution(contribution *Contribution) {
+func (graph *Neo4jConnection) AddContribution(contribution *Contribution) {
 
 	if recipientNode := graph.findCommittee(contribution.Recipient); recipientNode != nil {
+		var contributorNode *neoism.Node
 		if person, ok := contribution.Contributor.(*Person); ok {
-			contributorNode := graph.findPerson(person)
+			contributorNode = graph.findPerson(person)
 			if contributorNode == nil {
 				contributorNode = graph.createPerson(person)
 			}
+		}
 
+		if committee, ok := contribution.Contributor.(*NonCandidateCommittee); ok {
+			contributorNode = graph.findCommittee(&committee.Committee)
+		}
+
+		if contributorNode != nil {
 			contributorNode.Relate("contributed to", recipientNode.Id(), neoism.Props{"aggregate": contribution.Aggregate, "contributionId": contribution.Id, "amount": contribution.Amount, "in": contribution.Period, "type": contribution.ContributorType})
+		} else {
+			log.Println("Unable to find contributor:", contribution.Contributor.Name())
 		}
 	}
 
