@@ -1,6 +1,7 @@
 * text=auto
 
 *.go text eol=lf
+*.md text
 
 # Denote all files that are truly binary and should not be modified.
 *.zip binary
