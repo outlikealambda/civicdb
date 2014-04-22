@@ -3,12 +3,9 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	// "github.com/megesdal/melodispurences/address"
-	//"github.com/megesdal/melodispurences/bed"
-	"github.com/megesdal/melodispurences/data"
+	"github.com/peg-one/civicdb/data"
 	"io"
 	"log"
-	// "math"
 	"os"
 	"strconv"
 	"strings"

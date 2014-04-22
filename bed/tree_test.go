@@ -1,9 +1,6 @@
 package bed
 
-import (
-	// "fmt"
-	"testing"
-)
+import "testing"
 
 func TestRangeQuery(t *testing.T) {
 

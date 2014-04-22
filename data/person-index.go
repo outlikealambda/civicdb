@@ -2,8 +2,8 @@ package data
 
 import (
 	"fmt"
-	"github.com/megesdal/melodispurences/bed"
-	"github.com/megesdal/melodispurences/wmaddress"
+	"github.com/peg-one/civicdb/bed"
+	"github.com/peg-one/civicdb/wmaddress"
 	"math"
 	"strings"
 	"time"

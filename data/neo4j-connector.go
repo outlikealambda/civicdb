@@ -220,10 +220,14 @@ func (graph *Neo4jConnection) createPerson(person *Person) *neoism.Node {
 	result := []struct {
 		N neoism.Node // Column "n" gets automagically unmarshalled into field N
 	}{}
+	var zipCode int
+	if person.addresses != nil {
+		zipCode = person.addresses[0].zip
+	}
 	query := neoism.CypherQuery{
-		Statement: "CREATE (n:Person {personId: {personId}, firstName: {firstName}, lastName: {lastName}}) RETURN n",
+		Statement: "CREATE (n:Person {personId: {personId}, firstName: {firstName}, lastName: {lastName}, zipCode: {zipCode}}) RETURN n",
 		// Use parameters instead of constructing a query string
-		Parameters: neoism.Props{"personId": person.Id, "firstName": person.FirstName, "lastName": person.LastName},
+		Parameters: neoism.Props{"personId": person.Id, "firstName": person.FirstName, "lastName": person.LastName, "zipCode": zipCode},
 		Result:     &result,
 	}
 	graph.db.Cypher(&query)

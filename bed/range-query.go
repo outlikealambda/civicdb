@@ -1,8 +1,6 @@
 package bed
 
-import (
-	"fmt"
-)
+import "fmt"
 
 type RangeResult struct {
 	Key      string

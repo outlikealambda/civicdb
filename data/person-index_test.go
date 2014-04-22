@@ -1,8 +1,6 @@
 package data
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestScoreLastNameDistance(t *testing.T) {
 	score := scoreLastNameDistance(0.1)

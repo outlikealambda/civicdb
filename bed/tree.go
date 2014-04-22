@@ -1,10 +1,6 @@
 package bed
 
-import (
-	//"github.com/megesdal/melodispurences/damerau"
-	// "fmt"
-	"math"
-)
+import "math"
 
 type BPlusTree struct {
 	branchFactor int

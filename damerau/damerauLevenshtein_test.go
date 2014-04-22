@@ -1,8 +1,6 @@
 package damerau
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestDamerauLevenshteinDistanceReplace(t *testing.T) {
 	const inS, inT, outN = "cat", "hat", 1

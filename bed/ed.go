@@ -1,9 +1,5 @@
 package bed
 
-import (
-// "fmt"
-)
-
 func CompareDictionaryOrder(a string, b string) int {
 	if len(a) < len(b) {
 		return -1
